@@ -92,6 +92,48 @@ export class Vdir {
     return result
   }
 
+  /**
+   * Events whose title, location or description contain every word of
+   * `query`. A series is represented by its next occurrence (or its last one
+   * if it is over). Upcoming matches come first, soonest first, then past
+   * ones, most recent first.
+   */
+  search(query: string, limit = 50, now = new Date()): CalendarEvent[] {
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean)
+    if (!words.length) return []
+    const nowTime = ICAL.Time.fromJSDate(now, true)
+    const upcoming: CalendarEvent[] = []
+    const past: CalendarEvent[] = []
+    for (const { calendarId, event } of this.items) {
+      const haystack = [event.summary, event.location, event.description].join('\n').toLowerCase()
+      if (!words.every((w) => haystack.includes(w))) continue
+      const [start, end, item] = this.representative(event, nowTime)
+      const result = toEvent(calendarId, event, start, end, item)
+      if ((end ?? start).compare(nowTime) >= 0) upcoming.push(result)
+      else past.push(result)
+    }
+    const byStart = (a: CalendarEvent, b: CalendarEvent) => a.start.localeCompare(b.start)
+    return [...upcoming.sort(byStart), ...past.sort((a, b) => byStart(b, a))].slice(0, limit)
+  }
+
+  private representative(event: ICAL.Event, now: ICAL.Time): [ICAL.Time, ICAL.Time, ICAL.Event] {
+    if (!event.isRecurring()) return [event.startDate, event.endDate, event]
+    const iterator = event.iterator()
+    let last: ICAL.Time | undefined
+    for (
+      let i = 0, next = iterator.next();
+      next && i < MAX_OCCURRENCES;
+      i++, next = iterator.next()
+    ) {
+      last = next
+      const end = next.clone()
+      end.addDuration(event.duration)
+      if (end.compare(now) >= 0) break
+    }
+    const occurrence = event.getOccurrenceDetails(last ?? event.startDate)
+    return [occurrence.startDate, occurrence.endDate, occurrence.item]
+  }
+
   /** Reloads everything after a burst of file changes. */
   watch(onChange: () => void): void {
     let timer: NodeJS.Timeout | undefined

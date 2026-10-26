@@ -57,6 +57,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('config:get', () => config)
   ipcMain.handle('vdir:calendars', () => vdir.calendars())
   ipcMain.handle('vdir:events', (_event, range: DateRange) => vdir.events(range))
+  ipcMain.handle('vdir:search', (_event, query: string) => vdir.search(query))
   ipcMain.handle('shell:open', (_event, url: string) => {
     if (/^https?:\/\//.test(url)) return shell.openExternal(url)
   })

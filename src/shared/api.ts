@@ -4,6 +4,7 @@ export interface Api {
   config: () => Promise<Config>
   calendars: () => Promise<CalendarInfo[]>
   events: (range: DateRange) => Promise<CalendarEvent[]>
+  search: (query: string) => Promise<CalendarEvent[]>
   /** fires when files in the vdir changed (pimsync wrote something) */
   onChange: (listener: () => void) => () => void
   /** fires when config.yml was saved */

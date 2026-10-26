@@ -7,6 +7,7 @@ import { EventCalendar } from '@/components/event-calendar'
 import { EventDetails } from '@/components/event-details'
 import { GotoDialog } from '@/components/goto-dialog'
 import { KeymapHelp } from '@/components/keymap-help'
+import { SearchDialog } from '@/components/search-dialog'
 import { arrange, isVisible, type Visibility } from '@/lib/calendars'
 import { contrastFor } from '@/lib/color'
 import { toDate } from '@/lib/format'
@@ -44,6 +45,7 @@ function Calendar({ config }: { config: Config }) {
   const [details, setDetails] = useState(true)
   const [help, setHelp] = useState(false)
   const [gotoOpen, setGotoOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const [focusedId, setFocusedId] = useState<string>()
   // set when j/k ran off the visible range: focus first/last once the next one loaded
   const [pending, setPending] = useState<{ edge: 'first' | 'last'; from: string }>()
@@ -97,7 +99,7 @@ function Calendar({ config }: { config: Config }) {
     if (!focusedId) return
     const el = document.querySelector(`[data-bcal-id="${CSS.escape(focusedId)}"]`)
     el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-  }, [focusedId])
+  }, [focusedId, loaded])
 
   const toggle = useCallback(
     (calendar: CalendarInfo) =>
@@ -148,6 +150,7 @@ function Calendar({ config }: { config: Config }) {
         const link = focused?.links[0]
         if (link) window.api.openLink(link)
       } else if (action === 'goto') setGotoOpen(true)
+      else if (action === 'search') setSearchOpen(true)
       else if (action === 'toggle:sidebar') setSidebar((s) => !s)
       else if (action === 'help') setHelp((h) => !h)
       else if (action === 'close') {
@@ -223,6 +226,18 @@ function Calendar({ config }: { config: Config }) {
           onOpenLink={(url) => window.api.openLink(url)}
         />
       )}
+      <SearchDialog
+        open={searchOpen}
+        calendars={byId}
+        onSelect={(event) => {
+          const calendar = byId.get(event.calendarId)
+          if (calendar && !visible(calendar)) toggle(calendar)
+          controller.gotoDate(toDate(event.start))
+          setFocusedId(event.id)
+          setDetails(true)
+        }}
+        onClose={() => setSearchOpen(false)}
+      />
       <GotoDialog
         open={gotoOpen}
         current={controller.getDate() ?? new Date()}

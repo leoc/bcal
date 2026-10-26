@@ -13,6 +13,7 @@ const api: Api = {
   config: () => ipcRenderer.invoke('config:get'),
   calendars: () => ipcRenderer.invoke('vdir:calendars'),
   events: (range) => ipcRenderer.invoke('vdir:events', range),
+  search: (query) => ipcRenderer.invoke('vdir:search', query),
   onChange: (listener) => subscribe('vdir:changed', listener),
   onConfigChange: (listener) => subscribe('config:changed', listener),
   openLink: (url) => ipcRenderer.invoke('shell:open', url),

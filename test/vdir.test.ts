@@ -51,3 +51,22 @@ describe('event details', () => {
     })
   })
 })
+
+describe('search', () => {
+  const now = new Date('2026-10-28T12:00:00Z')
+
+  it('finds the next occurrence of a series and past single events', () => {
+    expect(vdir.search('standup', 50, now).map((e) => e.start)).toEqual([
+      '2026-10-29T08:30:00.000Z',
+    ])
+    expect(vdir.search('geburtstag', 50, new Date('2027-01-01')).map((e) => e.start)).toEqual([
+      '2026-10-29',
+    ])
+  })
+
+  it('matches every word in title, location or description', () => {
+    expect(vdir.search('standup agenda', 50, now)).toHaveLength(1)
+    expect(vdir.search('standup geburtstag', 50, now)).toHaveLength(0)
+    expect(vdir.search('   ', 50, now)).toHaveLength(0)
+  })
+})

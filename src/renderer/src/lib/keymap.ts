@@ -11,6 +11,7 @@ export type Action =
   | 'details'
   | 'open-link'
   | 'goto'
+  | 'search'
   | 'toggle:sidebar'
   | 'help'
   | 'close'
@@ -35,6 +36,7 @@ const descriptions: Record<string, string> = {
   details: 'Details ein/aus',
   'open-link': 'Link öffnen',
   goto: 'Datum springen',
+  search: 'Suchen',
   'toggle:sidebar': 'Seitenleiste',
   help: 'Tastenkürzel',
   close: 'Schließen',
@@ -58,6 +60,7 @@ const defaults: [string, Action][] = [
   ['i', 'details'],
   ['o', 'open-link'],
   ['g', 'goto'],
+  ['/', 'search'],
   ['b', 'toggle:sidebar'],
   ['?', 'help'],
   ['Escape', 'close'],
