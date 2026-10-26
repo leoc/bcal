@@ -229,20 +229,6 @@ export function parseQuickAdd(input: string, options: QuickAddOptions = {}): Qui
     text = cut(text, durationMatch)
   }
 
-  // location: "in Büro", "im Café Kranzler", "bei Simon", "at Office" (capitalized words)
-  let location: string | undefined
-  const locationMatch = text.match(
-    /\s(?:in|im|bei|at)\s+((?:[A-ZÄÖÜ][\p{L}\d.'-]*)(?:\s+[A-ZÄÖÜ\d][\p{L}\d.'-]*)*)(?=\s)/u,
-  )
-  if (locationMatch?.[1] && !/^\d/.test(locationMatch[1])) {
-    const candidate = locationMatch[1]
-    // "Freitag", "Montag" etc. are dates, not places
-    if (!(candidate.toLowerCase() in weekdayCodes)) {
-      location = candidate
-      text = cut(text, locationMatch)
-    }
-  }
-
   // date and time: whichever language recognises more of the line
   const de = chrono.de.parse(text, now, { forwardDate: true })
   const en = chrono.en.parse(text, now, { forwardDate: true })
@@ -290,6 +276,18 @@ export function parseQuickAdd(input: string, options: QuickAddOptions = {}): Qui
   // cut from the back so earlier indices stay valid
   for (const result of used.sort((a, b) => b.index - a.index)) {
     text = cut(text, { index: result.index, 0: result.text })
+  }
+
+  // place, after dates are cut so "bei Friedi Sonntag" keeps the Sunday:
+  // "in Büro", "im Café Kranzler", "at Office" (capitalized words) only set the
+  // location; "bei Friedi" names a host, so it stays in the title as well
+  let location: string | undefined
+  const locationMatch = text.match(
+    /\s(in|im|bei|at)\s+([A-ZÄÖÜ][\p{L}\d.'-]*(?:\s+[A-ZÄÖÜ][\p{L}\d.'-]*)*)(?=\s)/u,
+  )
+  if (locationMatch?.[2] && !(locationMatch[2].toLowerCase() in weekdayCodes)) {
+    location = locationMatch[2]
+    if (locationMatch[1] !== 'bei') text = cut(text, locationMatch)
   }
 
   // already past: a bare time means tomorrow, a bare weekday next week

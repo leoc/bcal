@@ -68,7 +68,7 @@ describe('parseQuickAdd', () => {
 
   it('reads calendar, location and video', () => {
     expect(parse('Freitag 10 Uhr Kaffee bei Simon #family')).toMatchObject({
-      title: 'Kaffee',
+      title: 'Kaffee bei Simon',
       location: 'Simon',
       calendar: 'family',
     })
@@ -117,5 +117,27 @@ describe('explicit', () => {
     expect(parse('woche').explicit).toBe(false)
     expect(parse('morgen Kaffee').explicit).toBe(true)
     expect(parse('Kaffee @Simon').explicit).toBe(true)
+  })
+})
+
+describe('places', () => {
+  it('keeps "bei" hosts in the title and does not swallow dates', () => {
+    expect(parse('Essen bei Friedi so 14uhr @richard')).toMatchObject({
+      title: 'Essen bei Friedi',
+      location: 'Friedi',
+      start: at(2026, 11, 1, 14),
+      people: ['richard'],
+    })
+    expect(parse('Essen bei Friedi Sonntag 14 Uhr')).toMatchObject({
+      title: 'Essen bei Friedi',
+      location: 'Friedi',
+      start: at(2026, 11, 1, 14),
+      allDay: false,
+    })
+    expect(parse('Kaffee im Café Kranzler morgen 15 Uhr')).toMatchObject({
+      title: 'Kaffee',
+      location: 'Café Kranzler',
+      start: at(2026, 10, 27, 15),
+    })
   })
 })

@@ -62,7 +62,7 @@ morgen 14-15:30 Workshop im Büro
 
 Date and time (chrono), duration (`1h`, `90min`, `eine Stunde`) or end
 (`14-15:30`, `bis 16 Uhr`), place (`in`, `im`, `bei`, `at` + capitalized
-words), recurrence (`jeden Montag`, `alle 2 Wochen`, `every monday`, `… bis
+words; `bei Friedi` also stays in the title), recurrence (`jeden Montag`, `alle 2 Wochen`, `every monday`, `… bis
 18.12.`), `#calendar`, `@person` (Tab completes from contacts and past
 participants; people with an address get invited by the server) and
 `video`/`call` for a meet.example.org room. Without time it is all-day, without
