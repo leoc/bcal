@@ -1,13 +1,22 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
-import type { DateRange } from '../shared/types'
+import type { Config, DateRange } from '../shared/types'
+import { loadConfig, watchConfig } from './config'
 import { captureAndQuit, screenshotPath, screenshotSize } from './screenshot'
 import { Vdir } from './vdir'
 
 const root = process.env.BCAL_VDIR ?? join(homedir(), '.calendar')
 const vdir = new Vdir(root)
 let window: BrowserWindow | null = null
+let config: Config
+
+// Keep Chromium's caches and localStorage out of ~/.config/bcal, which holds
+// only config.yml.
+app.setPath(
+  'userData',
+  join(process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'), 'bcal'),
+)
 
 const theme = process.env.BCAL_THEME
 if (theme === 'dark' || theme === 'light') nativeTheme.themeSource = theme
@@ -45,12 +54,20 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
+  ipcMain.handle('config:get', () => config)
   ipcMain.handle('vdir:calendars', () => vdir.calendars())
   ipcMain.handle('vdir:events', (_event, range: DateRange) => vdir.events(range))
   ipcMain.on('window:close', () => window?.close())
 
+  config = await loadConfig()
   await vdir.load()
-  if (!screenshotPath) vdir.watch(() => window?.webContents.send('vdir:changed'))
+  if (!screenshotPath) {
+    vdir.watch(() => window?.webContents.send('vdir:changed'))
+    watchConfig(async () => {
+      config = await loadConfig()
+      window?.webContents.send('config:changed')
+    })
+  }
   createWindow()
 })
 

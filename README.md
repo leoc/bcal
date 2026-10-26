@@ -27,14 +27,22 @@ Nextcloud (CalDAV) <-> pimsync (HM service) <-> ~/.calendar/<account>/<collectio
 
 ## Keys
 
-| Key | Action |
-|---|---|
-| `h` / `l`, `←` / `→` | previous / next period |
-| `t` | today |
-| `w` `m` `d` `a` | week, month, day, agenda |
-| `1`–`9` | toggle calendar |
-| `b` | toggle sidebar |
-| `?` | key help |
+| Key                  | Action                   |
+| -------------------- | ------------------------ |
+| `h` / `l`, `←` / `→` | previous / next period   |
+| `t`                  | today                    |
+| `w` `m` `d` `a`      | week, month, day, agenda |
+| `1`–`9`              | toggle calendar          |
+| `b`                  | toggle sidebar           |
+| `?`                  | key help                 |
+
+## Configuration
+
+`~/.config/bcal/config.yml` (or `BCAL_CONFIG`) is written with commented
+defaults on first start and reloaded on save: start view, sidebar groups (their
+order assigns the keys 1–9), calendars hidden by default, and key overrides
+(`<key>: <action>`, `none` unbinds). Toggles in the app win over `hidden` and
+are kept per machine. Chromium state lives in `~/.local/state/bcal`.
 
 ## Sync
 

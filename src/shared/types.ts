@@ -26,3 +26,24 @@ export interface DateRange {
   start: string
   end: string
 }
+
+export type ViewName = 'week' | 'month' | 'day' | 'agenda'
+
+export interface CalendarGroup {
+  name: string
+  /** displayname, collection name or `<account>/<collection>` */
+  calendars: string[]
+}
+
+export interface Config {
+  startView: ViewName
+  groups: CalendarGroup[]
+  /** calendars hidden until toggled on (same matching as groups) */
+  hidden: string[]
+  /** key -> action overrides, e.g. `{ n: next }`; action `none` unbinds */
+  keymap: Record<string, string>
+}
+
+export function matchesCalendar(calendar: CalendarInfo, ref: string): boolean {
+  return calendar.id === ref || calendar.name === ref || calendar.id.endsWith(`/${ref}`)
+}

@@ -1,14 +1,20 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { Api } from '../shared/api'
 
+function subscribe(channel: string, listener: () => void) {
+  const handler = () => listener()
+  ipcRenderer.on(channel, handler)
+  return () => {
+    ipcRenderer.off(channel, handler)
+  }
+}
+
 const api: Api = {
+  config: () => ipcRenderer.invoke('config:get'),
   calendars: () => ipcRenderer.invoke('vdir:calendars'),
   events: (range) => ipcRenderer.invoke('vdir:events', range),
-  onChange: (listener) => {
-    const handler = () => listener()
-    ipcRenderer.on('vdir:changed', handler)
-    return () => ipcRenderer.off('vdir:changed', handler)
-  },
+  onChange: (listener) => subscribe('vdir:changed', listener),
+  onConfigChange: (listener) => subscribe('config:changed', listener),
 }
 
 contextBridge.exposeInMainWorld('api', api)
