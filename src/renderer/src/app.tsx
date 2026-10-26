@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarSidebar } from '@/components/calendar-sidebar'
 import { EventCalendar } from '@/components/event-calendar'
 import { EventDetails } from '@/components/event-details'
+import { GotoDialog } from '@/components/goto-dialog'
 import { KeymapHelp } from '@/components/keymap-help'
 import { arrange, isVisible, type Visibility } from '@/lib/calendars'
 import { contrastFor } from '@/lib/color'
@@ -42,6 +43,7 @@ function Calendar({ config }: { config: Config }) {
   const [sidebar, setSidebar] = useState(true)
   const [details, setDetails] = useState(true)
   const [help, setHelp] = useState(false)
+  const [gotoOpen, setGotoOpen] = useState(false)
   const [focusedId, setFocusedId] = useState<string>()
   // set when j/k ran off the visible range: focus first/last once the next one loaded
   const [pending, setPending] = useState<{ edge: 'first' | 'last'; from: string }>()
@@ -145,7 +147,8 @@ function Calendar({ config }: { config: Config }) {
       else if (action === 'open-link') {
         const link = focused?.links[0]
         if (link) window.api.openLink(link)
-      } else if (action === 'toggle:sidebar') setSidebar((s) => !s)
+      } else if (action === 'goto') setGotoOpen(true)
+      else if (action === 'toggle:sidebar') setSidebar((s) => !s)
       else if (action === 'help') setHelp((h) => !h)
       else if (action === 'close') {
         if (help) setHelp(false)
@@ -220,6 +223,12 @@ function Calendar({ config }: { config: Config }) {
           onOpenLink={(url) => window.api.openLink(url)}
         />
       )}
+      <GotoDialog
+        open={gotoOpen}
+        current={controller.getDate() ?? new Date()}
+        onGoto={(date) => controller.gotoDate(date)}
+        onClose={() => setGotoOpen(false)}
+      />
       {help && <KeymapHelp bindings={bindings} onClose={() => setHelp(false)} />}
     </div>
   )

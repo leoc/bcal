@@ -20,6 +20,7 @@
     "src/shared/**/*",
     "src/renderer/src/lib/color.ts",
     "src/renderer/src/lib/format.ts",
+    "src/renderer/src/lib/goto.ts",
     "test/**/*",
     "electron.vite.config.ts",
     "vitest.config.mts"

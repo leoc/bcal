@@ -10,6 +10,7 @@ export type Action =
   | 'focus:prev'
   | 'details'
   | 'open-link'
+  | 'goto'
   | 'toggle:sidebar'
   | 'help'
   | 'close'
@@ -33,6 +34,7 @@ const descriptions: Record<string, string> = {
   'focus:prev': 'Vorheriger Termin',
   details: 'Details ein/aus',
   'open-link': 'Link öffnen',
+  goto: 'Datum springen',
   'toggle:sidebar': 'Seitenleiste',
   help: 'Tastenkürzel',
   close: 'Schließen',
@@ -55,6 +57,7 @@ const defaults: [string, Action][] = [
   ['Enter', 'details'],
   ['i', 'details'],
   ['o', 'open-link'],
+  ['g', 'goto'],
   ['b', 'toggle:sidebar'],
   ['?', 'help'],
   ['Escape', 'close'],
