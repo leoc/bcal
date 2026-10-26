@@ -15,6 +15,7 @@ const api: Api = {
   events: (range) => ipcRenderer.invoke('vdir:events', range),
   onChange: (listener) => subscribe('vdir:changed', listener),
   onConfigChange: (listener) => subscribe('config:changed', listener),
+  openLink: (url) => ipcRenderer.invoke('shell:open', url),
 }
 
 contextBridge.exposeInMainWorld('api', api)

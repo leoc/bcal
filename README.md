@@ -27,14 +27,18 @@ Nextcloud (CalDAV) <-> pimsync (HM service) <-> ~/.calendar/<account>/<collectio
 
 ## Keys
 
-| Key                  | Action                   |
-| -------------------- | ------------------------ |
-| `h` / `l`, `←` / `→` | previous / next period   |
-| `t`                  | today                    |
-| `w` `m` `d` `a`      | week, month, day, agenda |
-| `1`–`9`              | toggle calendar          |
-| `b`                  | toggle sidebar           |
-| `?`                  | key help                 |
+| Key                  | Action                      |
+| -------------------- | --------------------------- |
+| `h` / `l`, `←` / `→` | previous / next period      |
+| `t`                  | today                       |
+| `w` `m` `d` `a`      | week, month, day, agenda    |
+| `j` / `k`, `↓` / `↑` | next / previous event       |
+| `Enter`, `i`         | toggle details panel        |
+| `o`                  | open the event's first link |
+| `Esc`                | clear focus / close         |
+| `1`–`9`              | toggle calendar             |
+| `b`                  | toggle sidebar              |
+| `?`                  | key help                    |
 
 ## Configuration
 

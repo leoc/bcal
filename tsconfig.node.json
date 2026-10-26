@@ -10,12 +10,16 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "isolatedModules": true,
-    "composite": true
+    "composite": true,
+    "baseUrl": ".",
+    "paths": { "@/*": ["src/renderer/src/*"], "@shared/*": ["src/shared/*"] }
   },
   "include": [
     "src/main/**/*",
     "src/preload/**/*",
     "src/shared/**/*",
+    "src/renderer/src/lib/color.ts",
+    "src/renderer/src/lib/format.ts",
     "test/**/*",
     "electron.vite.config.ts",
     "vitest.config.mts"

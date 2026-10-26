@@ -35,7 +35,11 @@ function keysFor(bindings: Binding[], action: string) {
 }
 
 function label(key: string) {
-  return { ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc' }[key] ?? key
+  return (
+    { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', Escape: 'Esc', Enter: '↵' }[
+      key
+    ] ?? key
+  )
 }
 
 function Row({ keys, description }: { keys: string[]; description: string }) {

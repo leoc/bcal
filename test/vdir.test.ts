@@ -35,3 +35,19 @@ describe('Vdir', () => {
     expect(birthday).toMatchObject({ start: '2026-10-29', end: '2026-10-30', allDay: true })
   })
 })
+
+describe('event details', () => {
+  it('carries organizer, attendees, links and the series rule', () => {
+    const [first] = vdir.events(week).filter((e) => e.calendarId === 'acc/work')
+    expect(first).toMatchObject({
+      rrule: 'FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR',
+      location: 'https://meet.jit.si/bcal-standup',
+      organizer: { name: 'Arthur', email: 'arthur@example.org' },
+      attendees: [
+        { name: 'Sam', email: 'sam@example.org', status: 'ACCEPTED', role: 'REQ-PARTICIPANT' },
+        { name: undefined, email: 'richard@example.org', status: 'DECLINED', role: undefined },
+      ],
+      links: ['https://meet.jit.si/bcal-standup', 'https://example.org/agenda'],
+    })
+  })
+})

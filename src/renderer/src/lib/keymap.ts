@@ -6,6 +6,10 @@ export type Action =
   | 'view:month'
   | 'view:day'
   | 'view:list'
+  | 'focus:next'
+  | 'focus:prev'
+  | 'details'
+  | 'open-link'
   | 'toggle:sidebar'
   | 'help'
   | 'close'
@@ -25,6 +29,10 @@ const descriptions: Record<string, string> = {
   'view:month': 'Monat',
   'view:day': 'Tag',
   'view:list': 'Agenda',
+  'focus:next': 'Nächster Termin',
+  'focus:prev': 'Vorheriger Termin',
+  details: 'Details ein/aus',
+  'open-link': 'Link öffnen',
   'toggle:sidebar': 'Seitenleiste',
   help: 'Tastenkürzel',
   close: 'Schließen',
@@ -40,6 +48,13 @@ const defaults: [string, Action][] = [
   ['m', 'view:month'],
   ['d', 'view:day'],
   ['a', 'view:list'],
+  ['j', 'focus:next'],
+  ['k', 'focus:prev'],
+  ['ArrowDown', 'focus:next'],
+  ['ArrowUp', 'focus:prev'],
+  ['Enter', 'details'],
+  ['i', 'details'],
+  ['o', 'open-link'],
   ['b', 'toggle:sidebar'],
   ['?', 'help'],
   ['Escape', 'close'],

@@ -4,8 +4,11 @@ import type { CalendarEvent, CalendarInfo, Config, DateRange, ViewName } from '@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarSidebar } from '@/components/calendar-sidebar'
 import { EventCalendar } from '@/components/event-calendar'
+import { EventDetails } from '@/components/event-details'
 import { KeymapHelp } from '@/components/keymap-help'
 import { arrange, isVisible, type Visibility } from '@/lib/calendars'
+import { contrastFor } from '@/lib/color'
+import { toDate } from '@/lib/format'
 import { type Action, buildBindings, resolve } from '@/lib/keymap'
 
 const viewTypes: Record<ViewName, string> = {
@@ -33,30 +36,66 @@ export function App() {
 function Calendar({ config }: { config: Config }) {
   const controller = useCalendarController()
   const [calendars, setCalendars] = useState<CalendarInfo[]>([])
-  const [events, setEvents] = useState<CalendarEvent[]>([])
+  const [loaded, setLoaded] = useState<{ range: DateRange; events: CalendarEvent[] }>()
   const [range, setRange] = useState<DateRange>()
   const [visibility, setVisibility] = useState<Visibility>(loadVisibility)
   const [sidebar, setSidebar] = useState(true)
+  const [details, setDetails] = useState(true)
   const [help, setHelp] = useState(false)
+  const [focusedId, setFocusedId] = useState<string>()
+  // set when j/k ran off the visible range: focus first/last once the next one loaded
+  const [pending, setPending] = useState<{ edge: 'first' | 'last'; from: string }>()
   const [revision, setRevision] = useState(0)
 
   useEffect(() => window.api.onChange(() => setRevision((r) => r + 1)), [])
 
   useEffect(() => {
-    window.api.calendars().then(setCalendars)
+    if (revision >= 0) window.api.calendars().then(setCalendars)
   }, [revision])
 
   useEffect(() => {
-    if (range) window.api.events(range).then(setEvents)
+    if (range && revision >= 0)
+      window.api.events(range).then((events) => setLoaded({ range, events }))
   }, [range, revision])
 
   const groups = useMemo(() => arrange(calendars, config), [calendars, config])
   const ordered = useMemo(() => groups.flatMap((g) => g.calendars), [groups])
+  const byId = useMemo(() => new Map(calendars.map((c) => [c.id, c])), [calendars])
   const bindings = useMemo(() => buildBindings(config.keymap), [config.keymap])
   const visible = useCallback(
     (calendar: CalendarInfo) => isVisible(calendar, config, visibility),
     [config, visibility],
   )
+
+  /** visible events in chronological order, the order j/k walks */
+  const shown = useMemo(() => {
+    const rank = new Map(ordered.map((c, i) => [c.id, i]))
+    return (loaded?.events ?? [])
+      .filter((e) => {
+        const calendar = byId.get(e.calendarId)
+        return calendar !== undefined && visible(calendar)
+      })
+      .sort(
+        (a, b) =>
+          toDate(a.start).getTime() - toDate(b.start).getTime() ||
+          Number(b.allDay) - Number(a.allDay) ||
+          (rank.get(a.calendarId) ?? 0) - (rank.get(b.calendarId) ?? 0),
+      )
+  }, [loaded, byId, visible, ordered])
+
+  const focused = shown.find((e) => e.id === focusedId)
+
+  useEffect(() => {
+    if (!pending || !loaded || loaded.range.start === pending.from) return
+    setPending(undefined)
+    setFocusedId((pending.edge === 'first' ? shown[0] : shown.at(-1))?.id)
+  }, [pending, loaded, shown])
+
+  useEffect(() => {
+    if (!focusedId) return
+    const el = document.querySelector(`[data-bcal-id="${CSS.escape(focusedId)}"]`)
+    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [focusedId])
 
   const toggle = useCallback(
     (calendar: CalendarInfo) =>
@@ -68,6 +107,29 @@ function Calendar({ config }: { config: Config }) {
     [config],
   )
 
+  const moveFocus = useCallback(
+    (step: 1 | -1) => {
+      const index = shown.findIndex((e) => e.id === focusedId)
+      if (index === -1 && shown.length) {
+        // start next to "now" rather than at the edge of the view
+        const now = Date.now()
+        const upcoming = shown.findIndex((e) => toDate(e.end).getTime() > now)
+        const start = upcoming === -1 ? shown.length - (step > 0 ? 1 : 0) : upcoming
+        setFocusedId(shown[step > 0 ? start : Math.max(start - 1, 0)]?.id)
+        return
+      }
+      const target = shown[index + step]
+      if (target) {
+        setFocusedId(target.id)
+      } else if (range) {
+        setPending({ edge: step > 0 ? 'first' : 'last', from: range.start })
+        if (step > 0) controller.next()
+        else controller.prev()
+      }
+    },
+    [shown, focusedId, range, controller],
+  )
+
   useEffect(() => {
     const run = (action: Action) => {
       if (action === 'prev') controller.prev()
@@ -77,10 +139,18 @@ function Calendar({ config }: { config: Config }) {
       else if (action === 'view:month') controller.changeView(viewTypes.month)
       else if (action === 'view:day') controller.changeView(viewTypes.day)
       else if (action === 'view:list') controller.changeView(viewTypes.agenda)
-      else if (action === 'toggle:sidebar') setSidebar((s) => !s)
+      else if (action === 'focus:next') moveFocus(1)
+      else if (action === 'focus:prev') moveFocus(-1)
+      else if (action === 'details') setDetails((d) => !d)
+      else if (action === 'open-link') {
+        const link = focused?.links[0]
+        if (link) window.api.openLink(link)
+      } else if (action === 'toggle:sidebar') setSidebar((s) => !s)
       else if (action === 'help') setHelp((h) => !h)
-      else if (action === 'close') setHelp(false)
-      else if (action.startsWith('toggle:calendar:')) {
+      else if (action === 'close') {
+        if (help) setHelp(false)
+        else setFocusedId(undefined)
+      } else if (action.startsWith('toggle:calendar:')) {
         const calendar = ordered[Number(action.split(':')[2])]
         if (calendar) toggle(calendar)
       }
@@ -93,27 +163,24 @@ function Calendar({ config }: { config: Config }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [controller, ordered, toggle, bindings])
+  }, [controller, ordered, toggle, bindings, moveFocus, focused, help])
 
-  const byId = useMemo(() => new Map(calendars.map((c) => [c.id, c])), [calendars])
-  const visibleEvents = useMemo(
+  const calendarEvents = useMemo(
     () =>
-      events.flatMap((e) => {
-        const calendar = byId.get(e.calendarId)
-        if (!calendar || !visible(calendar)) return []
-        return [
-          {
-            id: e.id,
-            title: e.title,
-            start: e.start,
-            end: e.end,
-            allDay: e.allDay,
-            color: calendar.color,
-            extendedProps: { location: e.location, calendarId: e.calendarId },
-          },
-        ]
+      shown.map((e) => {
+        const color = byId.get(e.calendarId)?.color
+        return {
+          id: e.id,
+          title: e.title,
+          start: e.start,
+          end: e.end,
+          allDay: e.allDay,
+          color,
+          contrastColor: contrastFor(color),
+          className: e.id === focusedId ? 'bcal-focused' : undefined,
+        }
       }),
-    [events, byId, visible],
+    [shown, byId, focusedId],
   )
 
   return (
@@ -133,12 +200,26 @@ function Calendar({ config }: { config: Config }) {
           navLinks
           weekNumbers
           scrollTime="07:30:00"
-          events={visibleEvents}
+          events={calendarEvents}
+          eventDidMount={(info) => {
+            info.el.dataset.bcalId = info.event.id
+          }}
+          eventClick={(info) => {
+            setFocusedId(info.event.id)
+            setDetails(true)
+          }}
           datesSet={(info) =>
             setRange({ start: info.start.toISOString(), end: info.end.toISOString() })
           }
         />
       </main>
+      {details && (
+        <EventDetails
+          event={focused}
+          calendar={focused && byId.get(focused.calendarId)}
+          onOpenLink={(url) => window.api.openLink(url)}
+        />
+      )}
       {help && <KeymapHelp bindings={bindings} onClose={() => setHelp(false)} />}
     </div>
   )

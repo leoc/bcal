@@ -3,6 +3,7 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import ICAL from 'ical.js'
 import type { CalendarEvent, CalendarInfo, DateRange } from '../shared/types'
+import { attendees, links, person } from './details'
 
 // Safety net for open-ended RRULEs that start long before the range.
 const MAX_OCCURRENCES = 100_000
@@ -167,6 +168,10 @@ function toEvent(
 ): CalendarEvent {
   const allDay = start.isDate
   const format = (t: ICAL.Time) => (allDay ? t.toString() : t.toJSDate().toISOString())
+  const component = item.component
+  const url = component.getFirstPropertyValue('url')
+  const status = component.getFirstPropertyValue('status')
+  const rrule = master.component.getFirstPropertyValue('rrule')
   return {
     id: `${calendarId}/${master.uid}/${start.toString()}`,
     calendarId,
@@ -176,6 +181,10 @@ function toEvent(
     allDay,
     location: item.location || undefined,
     description: item.description || undefined,
-    recurring: master.isRecurring(),
+    rrule: rrule ? rrule.toString() : undefined,
+    status: typeof status === 'string' ? status : undefined,
+    organizer: person(component.getFirstProperty('organizer')),
+    attendees: attendees(component),
+    links: links(typeof url === 'string' ? url : undefined, item.location, item.description),
   }
 }

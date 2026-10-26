@@ -26,6 +26,11 @@ DTEND;TZID=Europe/Berlin:20261019T094500
 RRULE:FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR
 EXDATE;TZID=Europe/Berlin:20261027T093000
 SUMMARY:Standup
+LOCATION:https://meet.jit.si/bcal-standup
+DESCRIPTION:Agenda: https://example.org/agenda.
+ORGANIZER;CN=Arthur:mailto:arthur@example.org
+ATTENDEE;CN=Sam;PARTSTAT=ACCEPTED;ROLE=REQ-PARTICIPANT:mailto:sam@example.org
+ATTENDEE;PARTSTAT=DECLINED:mailto:richard@example.org
 END:VEVENT
 BEGIN:VEVENT
 UID:standup@bcal

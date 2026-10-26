@@ -8,8 +8,16 @@ export interface CalendarInfo {
   eventCount: number
 }
 
+export interface Attendee {
+  name?: string
+  email?: string
+  /** PARTSTAT: ACCEPTED, DECLINED, TENTATIVE, NEEDS-ACTION, ... */
+  status?: string
+  role?: string
+}
+
 export interface CalendarEvent {
-  /** UID plus occurrence start for recurring events */
+  /** calendar, UID and occurrence start, unique per occurrence */
   id: string
   calendarId: string
   title: string
@@ -19,7 +27,13 @@ export interface CalendarEvent {
   allDay: boolean
   location?: string
   description?: string
-  recurring: boolean
+  /** RRULE of the series, e.g. `FREQ=WEEKLY;BYDAY=MO` */
+  rrule?: string
+  status?: string
+  organizer?: Attendee
+  attendees: Attendee[]
+  /** http(s) links from URL, LOCATION and DESCRIPTION, meeting links first */
+  links: string[]
 }
 
 export interface DateRange {

@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
 import type { Config, DateRange } from '../shared/types'
 import { loadConfig, watchConfig } from './config'
 import { captureAndQuit, screenshotPath, screenshotSize } from './screenshot'
@@ -57,6 +57,9 @@ app.whenReady().then(async () => {
   ipcMain.handle('config:get', () => config)
   ipcMain.handle('vdir:calendars', () => vdir.calendars())
   ipcMain.handle('vdir:events', (_event, range: DateRange) => vdir.events(range))
+  ipcMain.handle('shell:open', (_event, url: string) => {
+    if (/^https?:\/\//.test(url)) return shell.openExternal(url)
+  })
   ipcMain.on('window:close', () => window?.close())
 
   config = await loadConfig()

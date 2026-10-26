@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Render bcal without showing a window and save a PNG.
-#   scripts/screenshot out.png [light|dark] [1600x1000]
+#   scripts/screenshot out.png [light|dark] [1600x1000] [keys...]
 # Uses BCAL_VDIR if set. Run inside the dev shell after `npm run build`.
 set -euo pipefail
 out=$(realpath -m "${1:?usage: scripts/screenshot out.png [light|dark] [WxH]}")
 cd "$(dirname "$0")/.."
 BCAL_SCREENSHOT="$out" BCAL_THEME="${2:-light}" BCAL_SCREENSHOT_SIZE="${3:-1600x1000}" \
-  electron . >/dev/null 2>&1
+  BCAL_SCREENSHOT_KEYS="${*:4}" electron . >/dev/null 2>&1
 echo "$out"
