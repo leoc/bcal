@@ -19,28 +19,35 @@ const viewTypes: Record<ViewName, string> = {
   day: 'timeGridDay',
   agenda: 'listWeek',
 }
-const VISIBILITY_KEY = 'bcal.visibility'
 
 export function App() {
   const [config, setConfig] = useState<Config>()
+  const [visibility, setVisibility] = useState<Visibility>()
   useDarkMode()
 
   useEffect(() => {
     const load = () => window.api.config().then(setConfig)
     load()
+    window.api.visibility().then(setVisibility)
     return window.api.onConfigChange(load)
   }, [])
 
   // FullCalendar takes the start view only on mount, so wait for the config.
-  return config ? <Calendar config={config} /> : null
+  return config && visibility ? <Calendar config={config} initialVisibility={visibility} /> : null
 }
 
-function Calendar({ config }: { config: Config }) {
+function Calendar({
+  config,
+  initialVisibility,
+}: {
+  config: Config
+  initialVisibility: Visibility
+}) {
   const controller = useCalendarController()
   const [calendars, setCalendars] = useState<CalendarInfo[]>([])
   const [loaded, setLoaded] = useState<{ range: DateRange; events: CalendarEvent[] }>()
   const [range, setRange] = useState<DateRange>()
-  const [visibility, setVisibility] = useState<Visibility>(loadVisibility)
+  const [visibility, setVisibility] = useState<Visibility>(initialVisibility)
   const [sidebar, setSidebar] = useState(true)
   const [details, setDetails] = useState(true)
   const [help, setHelp] = useState(false)
@@ -105,7 +112,7 @@ function Calendar({ config }: { config: Config }) {
     (calendar: CalendarInfo) =>
       setVisibility((prev) => {
         const next = { ...prev, [calendar.id]: !isVisible(calendar, config, prev) }
-        saveVisibility(next)
+        window.api.setVisibility(next)
         return next
       }),
     [config],
@@ -113,6 +120,8 @@ function Calendar({ config }: { config: Config }) {
 
   const moveFocus = useCallback(
     (step: 1 | -1) => {
+      // before the visible range loaded, an empty list would page away
+      if (!loaded || !range || loaded.range.start !== range.start) return
       const index = shown.findIndex((e) => e.id === focusedId)
       if (index === -1 && shown.length) {
         // start next to "now" rather than at the edge of the view
@@ -131,7 +140,7 @@ function Calendar({ config }: { config: Config }) {
         else controller.prev()
       }
     },
-    [shown, focusedId, range, controller],
+    [shown, focusedId, range, loaded, controller],
   )
 
   useEffect(() => {
@@ -257,20 +266,4 @@ function useDarkMode() {
     query.addEventListener('change', apply)
     return () => query.removeEventListener('change', apply)
   }, [])
-}
-
-function loadVisibility(): Visibility {
-  try {
-    return JSON.parse(localStorage.getItem(VISIBILITY_KEY) ?? '{}')
-  } catch {
-    return {}
-  }
-}
-
-function saveVisibility(visibility: Visibility) {
-  try {
-    localStorage.setItem(VISIBILITY_KEY, JSON.stringify(visibility))
-  } catch {
-    // only a convenience
-  }
 }

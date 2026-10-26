@@ -4,6 +4,7 @@ import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
 import type { Config, DateRange } from '../shared/types'
 import { loadConfig, watchConfig } from './config'
 import { captureAndQuit, screenshotPath, screenshotSize } from './screenshot'
+import { State } from './state'
 import { Vdir } from './vdir'
 
 const root = process.env.BCAL_VDIR ?? join(homedir(), '.calendar')
@@ -11,12 +12,10 @@ const vdir = new Vdir(root)
 let window: BrowserWindow | null = null
 let config: Config
 
-// Keep Chromium's caches and localStorage out of ~/.config/bcal, which holds
-// only config.yml.
-app.setPath(
-  'userData',
-  join(process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'), 'bcal'),
-)
+// Keep Chromium's caches out of ~/.config/bcal, which holds only config.yml.
+const stateDir = join(process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'), 'bcal')
+app.setPath('userData', stateDir)
+const visibility = new State<Record<string, boolean>>(stateDir, 'visibility', {})
 
 const theme = process.env.BCAL_THEME
 if (theme === 'dark' || theme === 'light') nativeTheme.themeSource = theme
@@ -55,6 +54,10 @@ function createWindow(): void {
 
 app.whenReady().then(async () => {
   ipcMain.handle('config:get', () => config)
+  ipcMain.handle('state:visibility', () => visibility.read())
+  ipcMain.handle('state:setVisibility', (_event, value: Record<string, boolean>) =>
+    visibility.write(value),
+  )
   ipcMain.handle('vdir:calendars', () => vdir.calendars())
   ipcMain.handle('vdir:events', (_event, range: DateRange) => vdir.events(range))
   ipcMain.handle('vdir:search', (_event, query: string) => vdir.search(query))
@@ -73,6 +76,7 @@ app.whenReady().then(async () => {
     })
   }
   createWindow()
+  setImmediate(() => vdir.warmUp())
 })
 
 app.on('window-all-closed', () => {

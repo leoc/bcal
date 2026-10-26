@@ -134,6 +134,19 @@ export class Vdir {
     return [occurrence.startDate, occurrence.endDate, occurrence.item]
   }
 
+  /**
+   * Expands the coming weeks once. ical.js is slow on its first timezone
+   * conversions (~1 s for 1600 events); doing this while the renderer boots
+   * makes the first real request fast.
+   */
+  warmUp(now = new Date()): void {
+    const day = 86_400_000
+    this.events({
+      start: new Date(now.getTime() - 7 * day).toISOString(),
+      end: new Date(now.getTime() + 42 * day).toISOString(),
+    })
+  }
+
   /** Reloads everything after a burst of file changes. */
   watch(onChange: () => void): void {
     let timer: NodeJS.Timeout | undefined

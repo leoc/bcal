@@ -9,6 +9,9 @@ export interface Api {
   onChange: (listener: () => void) => () => void
   /** fires when config.yml was saved */
   onConfigChange: (listener: () => void) => () => void
+  /** calendar toggles from the UI, kept per machine */
+  visibility: () => Promise<Record<string, boolean>>
+  setVisibility: (visibility: Record<string, boolean>) => Promise<void>
   /** opens an http(s) link in the default browser */
   openLink: (url: string) => Promise<void>
 }

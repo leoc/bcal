@@ -17,6 +17,8 @@ const api: Api = {
   onChange: (listener) => subscribe('vdir:changed', listener),
   onConfigChange: (listener) => subscribe('config:changed', listener),
   openLink: (url) => ipcRenderer.invoke('shell:open', url),
+  visibility: () => ipcRenderer.invoke('state:visibility'),
+  setVisibility: (visibility) => ipcRenderer.invoke('state:setVisibility', visibility),
 }
 
 contextBridge.exposeInMainWorld('api', api)
