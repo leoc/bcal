@@ -58,8 +58,44 @@ export interface Config {
   hidden: string[]
   /** key -> action overrides, e.g. `{ n: next }`; action `none` unbinds */
   keymap: Record<string, string>
+  /** calendar for new events, matched like groups; else the first one */
+  defaultCalendar?: string
+  /** minutes, when a new event names neither duration nor end */
+  defaultDuration: number
+  /** reminder in minutes before start; none when unset */
+  defaultAlarm?: number
+  /** who invites when a new event has attendees */
+  organizer?: Person
 }
 
 export function matchesCalendar(calendar: CalendarInfo, ref: string): boolean {
   return calendar.id === ref || calendar.name === ref || calendar.id.endsWith(`/${ref}`)
+}
+
+export interface Person {
+  name?: string
+  /** without `mailto:`; people without address can only be noted, not invited */
+  email?: string
+}
+
+/** A new event as the renderer drafts it; times are local wall-clock times. */
+export interface NewEvent {
+  calendarId: string
+  title: string
+  /** `YYYY-MM-DDTHH:mm:ss` (local) or `YYYY-MM-DD` for all-day */
+  start: string
+  end: string
+  allDay: boolean
+  location?: string
+  description?: string
+  rrule?: string
+  attendees: Person[]
+  /** minutes before start; no alarm when undefined */
+  alarm?: number
+}
+
+export interface Created {
+  /** id of the first occurrence, as `events()` reports it */
+  id: string
+  path: string
 }

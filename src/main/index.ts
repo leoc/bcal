@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
-import type { Config, DateRange } from '../shared/types'
+import type { Config, DateRange, NewEvent } from '../shared/types'
 import { loadConfig, watchConfig } from './config'
 import { captureAndQuit, screenshotPath, screenshotSize } from './screenshot'
 import { State } from './state'
@@ -61,6 +61,15 @@ app.whenReady().then(async () => {
   ipcMain.handle('vdir:calendars', () => vdir.calendars())
   ipcMain.handle('vdir:events', (_event, range: DateRange) => vdir.events(range))
   ipcMain.handle('vdir:search', (_event, query: string) => vdir.search(query))
+  ipcMain.handle('vdir:create', async (_event, input: NewEvent) => {
+    const created = await vdir.create(input, { organizer: config.organizer })
+    window?.webContents.send('vdir:changed')
+    return created
+  })
+  ipcMain.handle('vdir:undo', async (_event, path: string) => {
+    await vdir.undo(path)
+    window?.webContents.send('vdir:changed')
+  })
   ipcMain.handle('shell:open', (_event, url: string) => {
     if (/^https?:\/\//.test(url)) return shell.openExternal(url)
   })

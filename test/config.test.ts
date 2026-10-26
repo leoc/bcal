@@ -33,6 +33,10 @@ keymap: { n: next, h: none }
       ],
       hidden: ['birthdays'],
       keymap: { n: 'next', h: 'none' },
+      defaultCalendar: undefined,
+      defaultDuration: 60,
+      defaultAlarm: undefined,
+      organizer: undefined,
     })
   })
 })

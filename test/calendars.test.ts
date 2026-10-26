@@ -18,6 +18,7 @@ const config: Config = {
   ],
   hidden: ['birthdays'],
   keymap: {},
+  defaultDuration: 60,
 }
 const groups = arrange(calendars, config)
 const shown = (v: Record<string, boolean>) =>

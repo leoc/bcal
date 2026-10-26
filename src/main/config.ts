@@ -3,14 +3,20 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { parse } from 'yaml'
-import type { Config, ViewName } from '../shared/types'
+import type { Config, Person, ViewName } from '../shared/types'
 
 export const configPath =
   process.env.BCAL_CONFIG ?? join(homedir(), '.config', 'bcal', 'config.yml')
 
 const views: ViewName[] = ['week', 'month', 'day', 'agenda']
 
-export const defaultConfig: Config = { startView: 'week', groups: [], hidden: [], keymap: {} }
+export const defaultConfig: Config = {
+  startView: 'week',
+  groups: [],
+  hidden: [],
+  keymap: {},
+  defaultDuration: 60,
+}
 
 // Written on first start so the options are discoverable.
 const template = `# bcal configuration, reloaded on save.
@@ -35,6 +41,14 @@ groups:
 
 # Hidden until toggled on in the app.
 hidden: [Birthdays, Holidays]
+
+# New events (n, Ctrl+K). The calendar is matched like in groups; "#name" in
+# the line picks another one. Alarm in minutes before start (remove for none).
+defaultCalendar: Personal
+defaultDuration: 60
+defaultAlarm: 15
+# Invites go out from this address when a line names people (@Simon).
+organizer: { name: Arthur Andersen, email: arthur@example.org }
 
 # Key overrides: <key>: <action>. Actions: prev, next, today, view:week,
 # view:month, view:day, view:list, focus:next, focus:prev, details, open-link,
@@ -78,6 +92,10 @@ export function normalize(raw: unknown): Config {
       data.keymap && typeof data.keymap === 'object'
         ? Object.fromEntries(Object.entries(data.keymap).filter(([, v]) => typeof v === 'string'))
         : {},
+    defaultCalendar: typeof data.defaultCalendar === 'string' ? data.defaultCalendar : undefined,
+    defaultDuration: positive(data.defaultDuration) ?? defaultConfig.defaultDuration,
+    defaultAlarm: data.defaultAlarm === 0 ? 0 : positive(data.defaultAlarm),
+    organizer: organizer(data.organizer),
   }
 }
 
@@ -93,4 +111,15 @@ export function watchConfig(onChange: () => void): FSWatcher | undefined {
   } catch {
     return undefined
   }
+}
+
+function positive(value: unknown): number | undefined {
+  return typeof value === 'number' && value > 0 ? value : undefined
+}
+
+function organizer(value: unknown): Person | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const { name, email } = value as Record<string, unknown>
+  if (typeof email !== 'string' || !email.includes('@')) return undefined
+  return { email, name: typeof name === 'string' ? name : undefined }
 }

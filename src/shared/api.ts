@@ -1,10 +1,14 @@
-import type { CalendarEvent, CalendarInfo, Config, DateRange } from './types'
+import type { CalendarEvent, CalendarInfo, Config, Created, DateRange, NewEvent } from './types'
 
 export interface Api {
   config: () => Promise<Config>
   calendars: () => Promise<CalendarInfo[]>
   events: (range: DateRange) => Promise<CalendarEvent[]>
   search: (query: string) => Promise<CalendarEvent[]>
+  /** writes a new event into the vdir; invites go out via the server */
+  create: (event: NewEvent) => Promise<Created>
+  /** takes back an event created in this session (moves it to the trash) */
+  undo: (path: string) => Promise<void>
   /** fires when files in the vdir changed (pimsync wrote something) */
   onChange: (listener: () => void) => () => void
   /** fires when config.yml was saved */

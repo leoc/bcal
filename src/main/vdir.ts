@@ -1,15 +1,18 @@
 import { type FSWatcher, watch } from 'node:fs'
-import { readdir, readFile, stat } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import ICAL from 'ical.js'
-import type { CalendarEvent, CalendarInfo, DateRange } from '../shared/types'
+import type { CalendarEvent, CalendarInfo, Created, DateRange, NewEvent } from '../shared/types'
 import { attendees, links, person } from './details'
+import { buildIcs, type WriteOptions } from './writer'
 
 // Safety net for open-ended RRULEs that start long before the range.
 const MAX_OCCURRENCES = 100_000
 
 interface Item {
   calendarId: string
+  path: string
   event: ICAL.Event
 }
 
@@ -20,6 +23,8 @@ interface Item {
 export class Vdir {
   private calendarList: CalendarInfo[] = []
   private items: Item[] = []
+  /** files written in this session; only these may be undone */
+  private created = new Set<string>()
   private watcher?: FSWatcher
 
   constructor(private readonly root: string) {}
@@ -159,6 +164,37 @@ export class Vdir {
     })
   }
 
+  /** Writes a new event as `<uid>.ics` into its calendar; pimsync uploads it. */
+  async create(input: NewEvent, options: WriteOptions = {}): Promise<Created> {
+    if (!this.calendarList.some((c) => c.id === input.calendarId)) {
+      throw new Error(`unknown calendar ${input.calendarId}`)
+    }
+    const { uid, ics } = buildIcs(input, options)
+    const path = join(this.root, input.calendarId, `${uid}.ics`)
+    await writeFile(path, ics, { flag: 'wx' })
+    this.created.add(path)
+    // show it right away instead of waiting for the watcher's reload
+    this.items.push(...(await parseFile(path, input.calendarId)))
+    return { id: `${input.calendarId}/${uid}/${input.start}`, path }
+  }
+
+  /**
+   * Takes back an event created in this session: the file moves to the
+   * deletable area (restorable), pimsync then deletes it remotely.
+   */
+  async undo(
+    path: string,
+    trash = join(homedir(), '_nobackup', '_deletable', 'bcal'),
+  ): Promise<void> {
+    if (!this.created.has(path))
+      throw new Error('only events created in this session can be undone')
+    const target = join(trash, path.slice(this.root.length).replace(/^\/+/, ''))
+    await mkdir(join(target, '..'), { recursive: true })
+    await rename(path, target)
+    this.created.delete(path)
+    this.items = this.items.filter((item) => item.path !== path)
+  }
+
   close(): void {
     this.watcher?.close()
   }
@@ -200,9 +236,9 @@ async function parseFile(path: string, calendarId: string): Promise<Item[]> {
     const vevents = root.getAllSubcomponents('vevent')
     const master = vevents.find((v) => !v.hasProperty('recurrence-id'))
     // A file without master holds only detached overrides: show each as is.
-    if (!master) return vevents.map((v) => ({ calendarId, event: new ICAL.Event(v) }))
+    if (!master) return vevents.map((v) => ({ calendarId, path, event: new ICAL.Event(v) }))
     const exceptions = vevents.filter((v) => v !== master)
-    return [{ calendarId, event: new ICAL.Event(master, { exceptions }) }]
+    return [{ calendarId, path, event: new ICAL.Event(master, { exceptions }) }]
   } catch (error) {
     console.warn(`bcal: cannot parse ${path}:`, error)
     return []
