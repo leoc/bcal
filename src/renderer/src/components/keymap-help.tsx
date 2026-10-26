@@ -9,8 +9,7 @@ export function KeymapHelp({ bindings, onClose }: Props) {
   // one row per action; calendar toggles collapse into a single "1-9" row
   const rows = bindings.filter(
     (b, i) =>
-      !b.action.startsWith('toggle:calendar:') &&
-      bindings.findIndex((o) => o.action === b.action) === i,
+      !b.action.startsWith('group:') && bindings.findIndex((o) => o.action === b.action) === i,
   )
   return (
     <div
@@ -23,7 +22,7 @@ export function KeymapHelp({ bindings, onClose }: Props) {
           {rows.map((b) => (
             <Row key={b.action} keys={keysFor(bindings, b.action)} description={b.description} />
           ))}
-          <Row keys={['1–9']} description="Kalender ein/aus" />
+          <Row keys={['1–9']} description="Gruppe solo bzw. an/aus" />
         </dl>
       </div>
     </div>

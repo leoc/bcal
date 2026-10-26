@@ -13,11 +13,13 @@ import { formatWhen, toDate } from '@/lib/format'
 interface Props {
   open: boolean
   calendars: Map<string, CalendarInfo>
+  /** list hits as "Termin" only */
+  incognito: boolean
   onSelect: (event: CalendarEvent) => void
   onClose: () => void
 }
 
-export function SearchDialog({ open, calendars, onSelect, onClose }: Props) {
+export function SearchDialog({ open, calendars, incognito, onSelect, onClose }: Props) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<CalendarEvent[]>([])
 
@@ -66,7 +68,7 @@ export function SearchDialog({ open, calendars, onSelect, onClose }: Props) {
                     style={{ backgroundColor: calendar?.color }}
                   />
                   <div className={past ? 'min-w-0 flex-1 opacity-60' : 'min-w-0 flex-1'}>
-                    <div className="truncate">{event.title}</div>
+                    <div className="truncate">{incognito ? 'Termin' : event.title}</div>
                     <div className="truncate text-xs text-muted-foreground">
                       {formatWhen(event)}
                       {event.rrule && ' · Serie'} · {calendar?.name}

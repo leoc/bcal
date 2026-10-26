@@ -7,14 +7,29 @@ import { cn } from '@/lib/utils'
 interface Props {
   event?: CalendarEvent
   calendar?: CalendarInfo
+  /** show only calendar and time */
+  incognito: boolean
   onOpenLink: (url: string) => void
 }
 
-export function EventDetails({ event, calendar, onOpenLink }: Props) {
+export function EventDetails({ event, calendar, incognito, onOpenLink }: Props) {
+  // incognito: keep calendar and time, drop everything that may carry names
+  const shown =
+    event && incognito
+      ? {
+          ...event,
+          title: 'Termin',
+          location: undefined,
+          description: undefined,
+          organizer: undefined,
+          attendees: [],
+          links: [],
+        }
+      : event
   return (
     <aside className="flex w-80 shrink-0 flex-col border-l bg-sidebar text-sm">
       <div className="drag h-[72px] shrink-0" />
-      {event ? (
+      {shown ? (
         <div className="flex-1 space-y-5 overflow-y-auto px-5 pb-6 select-text">
           <div>
             <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
@@ -23,24 +38,24 @@ export function EventDetails({ event, calendar, onOpenLink }: Props) {
                 style={{ backgroundColor: calendar?.color }}
               />
               {calendar?.name}
-              {event.status === 'CANCELLED' && <span className="text-destructive">abgesagt</span>}
+              {shown.status === 'CANCELLED' && <span className="text-destructive">abgesagt</span>}
             </div>
-            <h2 className="text-lg leading-snug font-semibold">{event.title}</h2>
-            <p className="mt-1 text-muted-foreground">{formatWhen(event)}</p>
+            <h2 className="text-lg leading-snug font-semibold">{shown.title}</h2>
+            <p className="mt-1 text-muted-foreground">{formatWhen(shown)}</p>
           </div>
 
-          {event.rrule && (
+          {shown.rrule && (
             <Row icon={<Repeat />}>
-              <span className="first-letter:uppercase">{formatRrule(event.rrule)}</span>
+              <span className="first-letter:uppercase">{formatRrule(shown.rrule)}</span>
             </Row>
           )}
-          {event.location && !/^https?:\/\//.test(event.location) && (
-            <Row icon={<MapPin />}>{event.location}</Row>
+          {shown.location && !/^https?:\/\//.test(shown.location) && (
+            <Row icon={<MapPin />}>{shown.location}</Row>
           )}
 
-          {event.links.length > 0 && (
+          {shown.links.length > 0 && (
             <ul className="space-y-1">
-              {event.links.map((link, index) => (
+              {shown.links.map((link, index) => (
                 <li key={link}>
                   <button
                     type="button"
@@ -58,12 +73,12 @@ export function EventDetails({ event, calendar, onOpenLink }: Props) {
             </ul>
           )}
 
-          {(event.organizer || event.attendees.length > 0) && (
+          {(shown.organizer || shown.attendees.length > 0) && (
             <Row icon={<Users />}>
               <ul className="space-y-1.5">
-                {event.organizer && <Person person={event.organizer} note="Organisation" />}
-                {event.attendees
-                  .filter((a) => a.email !== event.organizer?.email)
+                {shown.organizer && <Person person={shown.organizer} note="Organisation" />}
+                {shown.attendees
+                  .filter((a) => a.email !== shown.organizer?.email)
                   .map((a) => (
                     <Person key={a.email ?? a.name} person={a} />
                   ))}
@@ -71,9 +86,9 @@ export function EventDetails({ event, calendar, onOpenLink }: Props) {
             </Row>
           )}
 
-          {event.description && (
+          {shown.description && (
             <p className="whitespace-pre-wrap break-words text-muted-foreground">
-              {event.description}
+              {shown.description}
             </p>
           )}
         </div>

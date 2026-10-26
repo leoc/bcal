@@ -18,13 +18,19 @@ startView: month
 groups:
   - name: Privat
     calendars: [family, Mia]
+  - name: Sonstiges
+    toggle: true
+    calendars: [birthdays]
 hidden: [birthdays]
 keymap: { n: next, h: none }
 `),
     )
     expect(config).toEqual({
       startView: 'month',
-      groups: [{ name: 'Privat', calendars: ['family', 'Mia'] }],
+      groups: [
+        { name: 'Privat', toggle: false, calendars: ['family', 'Mia'] },
+        { name: 'Sonstiges', toggle: true, calendars: ['birthdays'] },
+      ],
       hidden: ['birthdays'],
       keymap: { n: 'next', h: 'none' },
     })

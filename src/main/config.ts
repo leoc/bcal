@@ -18,16 +18,19 @@ const template = `# bcal configuration, reloaded on save.
 # week | month | day | agenda
 startView: week
 
-# Sidebar groups, in order. Calendars are matched by display name, collection
-# name or <account>/<collection>. The order also assigns the keys 1-9.
-# Calendars in no group end up under "Weitere".
+# Sidebar groups, in order; the order assigns the keys 1-9 (0 shows all).
+# A group's key shows only that group, except for groups with toggle: true,
+# whose key switches them on or off on top of whatever is shown. Calendars
+# are matched by display name, collection name or <account>/<collection>;
+# calendars in no group end up under "Weitere".
 groups:
-  - name: Privat
-    calendars: [Personal, Family]
   - name: Arbeit
     calendars:
       [Work, Team]
+  - name: Privat
+    calendars: [Personal, Family]
   - name: Sonstiges
+    toggle: true
     calendars: [Birthdays, Holidays]
 
 # Hidden until toggled on in the app.
@@ -35,7 +38,8 @@ hidden: [Birthdays, Holidays]
 
 # Key overrides: <key>: <action>. Actions: prev, next, today, view:week,
 # view:month, view:day, view:list, focus:next, focus:prev, details, open-link,
-# goto, search, toggle:sidebar, help, close, none (unbind).
+# goto, search, toggle:sidebar, incognito, groups:all, group:<n> (0-based),
+# help, close, none (unbind).
 keymap: {}
 `
 
@@ -63,7 +67,11 @@ export function normalize(raw: unknown): Config {
     groups: Array.isArray(data.groups)
       ? data.groups
           .filter((g) => g && typeof g.name === 'string')
-          .map((g) => ({ name: g.name, calendars: strings(g.calendars) }))
+          .map((g) => ({
+            name: g.name,
+            toggle: g.toggle === true,
+            calendars: strings(g.calendars),
+          }))
       : [],
     hidden: strings(data.hidden),
     keymap:

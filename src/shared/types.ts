@@ -45,6 +45,8 @@ export type ViewName = 'week' | 'month' | 'day' | 'agenda'
 
 export interface CalendarGroup {
   name: string
+  /** an add-on group: its key switches it on/off instead of showing it alone */
+  toggle: boolean
   /** displayname, collection name or `<account>/<collection>` */
   calendars: string[]
 }

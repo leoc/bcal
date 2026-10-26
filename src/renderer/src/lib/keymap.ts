@@ -15,7 +15,9 @@ export type Action =
   | 'toggle:sidebar'
   | 'help'
   | 'close'
-  | `toggle:calendar:${number}`
+  | 'incognito'
+  | 'groups:all'
+  | `group:${number}`
 
 export interface Binding {
   key: string
@@ -40,6 +42,8 @@ const descriptions: Record<string, string> = {
   'toggle:sidebar': 'Seitenleiste',
   help: 'Tastenkürzel',
   close: 'Schließen',
+  incognito: 'Inkognito (Titel ausblenden)',
+  'groups:all': 'Alle Kalender',
 }
 
 const defaults: [string, Action][] = [
@@ -64,18 +68,20 @@ const defaults: [string, Action][] = [
   ['b', 'toggle:sidebar'],
   ['?', 'help'],
   ['Escape', 'close'],
-  ...Array.from({ length: 9 }, (_, i): [string, Action] => [String(i + 1), `toggle:calendar:${i}`]),
+  ['x', 'incognito'],
+  ['0', 'groups:all'],
+  ...Array.from({ length: 9 }, (_, i): [string, Action] => [String(i + 1), `group:${i}`]),
 ]
 
 function describe(action: Action): string {
-  if (action.startsWith('toggle:calendar:')) {
-    return `Kalender ${Number(action.split(':')[2]) + 1} ein/aus`
+  if (action.startsWith('group:')) {
+    return `Gruppe ${Number(action.split(':')[1]) + 1}`
   }
   return descriptions[action] ?? action
 }
 
 function isAction(value: string): value is Action {
-  return value in descriptions || /^toggle:calendar:\d+$/.test(value)
+  return value in descriptions || /^group:\d+$/.test(value)
 }
 
 /** Vim-flavoured defaults, overridden per key from config.yml (`none` unbinds). */

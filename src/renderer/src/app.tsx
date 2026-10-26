@@ -8,7 +8,7 @@ import { EventDetails } from '@/components/event-details'
 import { GotoDialog } from '@/components/goto-dialog'
 import { KeymapHelp } from '@/components/keymap-help'
 import { SearchDialog } from '@/components/search-dialog'
-import { arrange, isVisible, type Visibility } from '@/lib/calendars'
+import { arrange, isVisible, pressGroup, showAll, type Visibility } from '@/lib/calendars'
 import { contrastFor } from '@/lib/color'
 import { toDate } from '@/lib/format'
 import { type Action, buildBindings, resolve } from '@/lib/keymap'
@@ -51,6 +51,8 @@ function Calendar({
   const [sidebar, setSidebar] = useState(true)
   const [details, setDetails] = useState(true)
   const [help, setHelp] = useState(false)
+  // hides titles and details, e.g. for screen sharing; not persisted
+  const [incognito, setIncognito] = useState(false)
   const [gotoOpen, setGotoOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [focusedId, setFocusedId] = useState<string>()
@@ -108,14 +110,20 @@ function Calendar({
     el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [focusedId, loaded])
 
-  const toggle = useCallback(
-    (calendar: CalendarInfo) =>
+  const updateVisibility = useCallback(
+    (change: (prev: Visibility, visibleIn: (c: CalendarInfo) => boolean) => Visibility) =>
       setVisibility((prev) => {
-        const next = { ...prev, [calendar.id]: !isVisible(calendar, config, prev) }
+        const next = change(prev, (c) => isVisible(c, config, prev))
         window.api.setVisibility(next)
         return next
       }),
     [config],
+  )
+
+  const toggle = useCallback(
+    (calendar: CalendarInfo) =>
+      updateVisibility((prev, visibleIn) => ({ ...prev, [calendar.id]: !visibleIn(calendar) })),
+    [updateVisibility],
   )
 
   const moveFocus = useCallback(
@@ -165,9 +173,11 @@ function Calendar({
       else if (action === 'close') {
         if (help) setHelp(false)
         else setFocusedId(undefined)
-      } else if (action.startsWith('toggle:calendar:')) {
-        const calendar = ordered[Number(action.split(':')[2])]
-        if (calendar) toggle(calendar)
+      } else if (action === 'incognito') setIncognito((i) => !i)
+      else if (action === 'groups:all') updateVisibility(() => showAll(groups))
+      else if (action.startsWith('group:')) {
+        const index = Number(action.split(':')[1])
+        updateVisibility((_, visibleIn) => pressGroup(groups, index, visibleIn))
       }
     }
     const onKey = (event: KeyboardEvent) => {
@@ -178,7 +188,7 @@ function Calendar({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [controller, ordered, toggle, bindings, moveFocus, focused, help])
+  }, [controller, groups, updateVisibility, bindings, moveFocus, focused, help])
 
   const calendarEvents = useMemo(
     () =>
@@ -186,7 +196,7 @@ function Calendar({
         const color = byId.get(e.calendarId)?.color
         return {
           id: e.id,
-          title: e.title,
+          title: incognito ? 'Termin' : e.title,
           start: e.start,
           end: e.end,
           allDay: e.allDay,
@@ -195,12 +205,19 @@ function Calendar({
           className: e.id === focusedId ? 'bcal-focused' : undefined,
         }
       }),
-    [shown, byId, focusedId],
+    [shown, byId, focusedId, incognito],
   )
 
   return (
     <div className="flex h-full">
-      {sidebar && <CalendarSidebar groups={groups} visible={visible} onToggle={toggle} />}
+      {sidebar && (
+        <CalendarSidebar
+          groups={groups}
+          visible={visible}
+          incognito={incognito}
+          onToggle={toggle}
+        />
+      )}
       <main className="min-w-0 flex-1">
         <EventCalendar
           className="h-full"
@@ -232,12 +249,14 @@ function Calendar({
         <EventDetails
           event={focused}
           calendar={focused && byId.get(focused.calendarId)}
+          incognito={incognito}
           onOpenLink={(url) => window.api.openLink(url)}
         />
       )}
       <SearchDialog
         open={searchOpen}
         calendars={byId}
+        incognito={incognito}
         onSelect={(event) => {
           const calendar = byId.get(event.calendarId)
           if (calendar && !visible(calendar)) toggle(calendar)

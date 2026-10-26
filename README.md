@@ -27,25 +27,29 @@ Nextcloud (CalDAV) <-> pimsync (HM service) <-> ~/.calendar/<account>/<collectio
 
 ## Keys
 
-| Key                  | Action                                                         |
-| -------------------- | -------------------------------------------------------------- |
-| `h` / `l`, `←` / `→` | previous / next period                                         |
-| `t`                  | today                                                          |
-| `w` `m` `d` `a`      | week, month, day, agenda                                       |
-| `j` / `k`, `↓` / `↑` | next / previous event                                          |
-| `Enter`, `i`         | toggle details panel                                           |
-| `o`                  | open the event's first link                                    |
-| `Esc`                | clear focus / close                                            |
-| `g`                  | go to date (`fr`, `12.11.`, `kw 45`, `+3`, `nächsten Freitag`) |
-| `1`–`9`              | toggle calendar                                                |
-| `b`                  | toggle sidebar                                                 |
-| `?`                  | key help                                                       |
+| Key                  | Action                                                             |
+| -------------------- | ------------------------------------------------------------------ |
+| `h` / `l`, `←` / `→` | previous / next period                                             |
+| `t`                  | today                                                              |
+| `w` `m` `d` `a`      | week, month, day, agenda                                           |
+| `j` / `k`, `↓` / `↑` | next / previous event                                              |
+| `Enter`, `i`         | toggle details panel                                               |
+| `o`                  | open the event's first link                                        |
+| `Esc`                | clear focus / close                                                |
+| `g`                  | go to date (`fr`, `12.11.`, `kw 45`, `+3`, `nächsten Freitag`)     |
+| `/`                  | search all events                                                  |
+| `1`–`9`              | show only that group; add-on groups (`toggle: true`) switch on/off |
+| `0`                  | show all calendars                                                 |
+| `x`                  | incognito: titles become "Termin", no names in details or search   |
+| `b`                  | toggle sidebar                                                     |
+| `?`                  | key help                                                           |
 
 ## Configuration
 
 `~/.config/bcal/config.yml` (or `BCAL_CONFIG`) is written with commented
 defaults on first start and reloaded on save: start view, sidebar groups (their
-order assigns the keys 1–9), calendars hidden by default, and key overrides
+order assigns the keys 1–9; `toggle: true` makes a group an add-on that its
+key switches on and off), calendars hidden by default, and key overrides
 (`<key>: <action>`, `none` unbinds). Toggles in the app win over `hidden` and
 are kept per machine. Chromium state lives in `~/.local/state/bcal`.
 
