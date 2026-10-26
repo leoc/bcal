@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
 import type { Config, DateRange, NewEvent } from '../shared/types'
 import { loadConfig, watchConfig } from './config'
+import { type Candidate, mergePeople, rankPeople, readContacts } from './people'
 import { captureAndQuit, screenshotPath, screenshotSize } from './screenshot'
 import { State } from './state'
 import { Vdir } from './vdir'
@@ -10,6 +11,13 @@ import { Vdir } from './vdir'
 const root = process.env.BCAL_VDIR ?? join(homedir(), '.calendar')
 const vdir = new Vdir(root)
 let window: BrowserWindow | null = null
+const contactsDir = process.env.BCAL_CONTACTS ?? join(homedir(), '.contacts')
+let people: Promise<Candidate[]> | undefined
+// rebuilt lazily after the vdir changed
+const loadPeople = async () =>
+  mergePeople(await readContacts(contactsDir), vdir.participants()).filter(
+    (p) => p.email !== config.organizer?.email,
+  )
 let config: Config
 
 // Keep Chromium's caches out of ~/.config/bcal, which holds only config.yml.
@@ -66,6 +74,10 @@ app.whenReady().then(async () => {
     window?.webContents.send('vdir:changed')
     return created
   })
+  ipcMain.handle('people:search', async (_event, query: string) => {
+    people ??= loadPeople()
+    return rankPeople(await people, query).map(({ name, email }) => ({ name, email }))
+  })
   ipcMain.handle('vdir:undo', async (_event, path: string) => {
     await vdir.undo(path)
     window?.webContents.send('vdir:changed')
@@ -78,7 +90,10 @@ app.whenReady().then(async () => {
   config = await loadConfig()
   await vdir.load()
   if (!screenshotPath) {
-    vdir.watch(() => window?.webContents.send('vdir:changed'))
+    vdir.watch(() => {
+      people = undefined
+      window?.webContents.send('vdir:changed')
+    })
     watchConfig(async () => {
       config = await loadConfig()
       window?.webContents.send('config:changed')

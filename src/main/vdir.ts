@@ -3,7 +3,14 @@ import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promi
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import ICAL from 'ical.js'
-import type { CalendarEvent, CalendarInfo, Created, DateRange, NewEvent } from '../shared/types'
+import type {
+  CalendarEvent,
+  CalendarInfo,
+  Created,
+  DateRange,
+  NewEvent,
+  Person,
+} from '../shared/types'
 import { attendees, links, person } from './details'
 import { buildIcs, type WriteOptions } from './writer'
 
@@ -161,6 +168,17 @@ export class Vdir {
         await this.load()
         onChange()
       }, 500)
+    })
+  }
+
+  /** Organizers and attendees of all events, one entry per appearance. */
+  participants(): Person[] {
+    return this.items.flatMap(({ event }) => {
+      const organizer = person(event.component.getFirstProperty('organizer'))
+      return [...(organizer ? [organizer] : []), ...attendees(event.component)].map((p) => ({
+        name: p.name,
+        email: p.email?.toLowerCase(),
+      }))
     })
   }
 

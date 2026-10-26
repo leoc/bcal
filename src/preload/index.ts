@@ -16,6 +16,7 @@ const api: Api = {
   search: (query) => ipcRenderer.invoke('vdir:search', query),
   create: (event) => ipcRenderer.invoke('vdir:create', event),
   undo: (path) => ipcRenderer.invoke('vdir:undo', path),
+  people: (query) => ipcRenderer.invoke('people:search', query),
   onChange: (listener) => subscribe('vdir:changed', listener),
   onConfigChange: (listener) => subscribe('config:changed', listener),
   openLink: (url) => ipcRenderer.invoke('shell:open', url),
