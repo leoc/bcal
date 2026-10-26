@@ -2,11 +2,15 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { DateRange } from '../shared/types'
+import { captureAndQuit, screenshotPath, screenshotSize } from './screenshot'
 import { Vdir } from './vdir'
 
 const root = process.env.BCAL_VDIR ?? join(homedir(), '.calendar')
 const vdir = new Vdir(root)
 let window: BrowserWindow | null = null
+
+const theme = process.env.BCAL_THEME
+if (theme === 'dark' || theme === 'light') nativeTheme.themeSource = theme
 
 function createWindow(): void {
   window = new BrowserWindow({
@@ -14,6 +18,7 @@ function createWindow(): void {
     height: 820,
     minWidth: 720,
     minHeight: 480,
+    ...(screenshotPath ? screenshotSize() : {}),
     show: false,
     title: 'bcal',
     frame: false,
@@ -27,7 +32,8 @@ function createWindow(): void {
     },
   })
 
-  window.once('ready-to-show', () => window?.show())
+  if (screenshotPath) captureAndQuit(window, screenshotPath, () => app.quit())
+  else window.once('ready-to-show', () => window?.show())
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', (event) => event.preventDefault())
 
@@ -44,7 +50,7 @@ app.whenReady().then(async () => {
   ipcMain.on('window:close', () => window?.close())
 
   await vdir.load()
-  vdir.watch(() => window?.webContents.send('vdir:changed'))
+  if (!screenshotPath) vdir.watch(() => window?.webContents.send('vdir:changed'))
   createWindow()
 })
 
