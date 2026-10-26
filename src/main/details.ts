@@ -7,14 +7,16 @@ const URL_PATTERN = /https?:\/\/[^\s<>"')\]]+/g
 
 export function person(property: ICAL.Property | null): Attendee | undefined {
   if (!property) return undefined
-  const value = String(property.getFirstValue() ?? '')
+  const value = String(property.getFirstValue() ?? '').trim()
   const param = (name: string) => {
     const v = property.getParameter(name)
     return typeof v === 'string' ? v : undefined
   }
   return {
-    name: param('cn'),
-    email: value.replace(/^mailto:/i, '') || undefined,
+    // many clients put the address into CN; that is no name
+    name: param('cn')?.includes('@') ? undefined : param('cn'),
+    // some clients write the scheme twice (mailto:mailto:…)
+    email: value.replace(/^(mailto:)+/i, '') || undefined,
     status: param('partstat'),
     role: param('role'),
   }

@@ -7,12 +7,14 @@ import { cn } from '@/lib/utils'
 interface Props {
   event?: CalendarEvent
   calendar?: CalendarInfo
+  /** an unsaved draft from the palette */
+  draft?: boolean
   /** show only calendar and time */
   incognito: boolean
   onOpenLink: (url: string) => void
 }
 
-export function EventDetails({ event, calendar, incognito, onOpenLink }: Props) {
+export function EventDetails({ event, calendar, draft, incognito, onOpenLink }: Props) {
   // incognito: keep calendar and time, drop everything that may carry names
   const shown =
     event && incognito
@@ -39,6 +41,11 @@ export function EventDetails({ event, calendar, incognito, onOpenLink }: Props) 
               />
               {calendar?.name}
               {shown.status === 'CANCELLED' && <span className="text-destructive">abgesagt</span>}
+              {draft && (
+                <span className="rounded border border-dashed px-1.5 text-[11px] text-foreground">
+                  Entwurf
+                </span>
+              )}
             </div>
             <h2 className="text-lg leading-snug font-semibold">{shown.title}</h2>
             <p className="mt-1 text-muted-foreground">{formatWhen(shown)}</p>
@@ -78,7 +85,7 @@ export function EventDetails({ event, calendar, incognito, onOpenLink }: Props) 
               <ul className="space-y-1.5">
                 {shown.organizer && <Person person={shown.organizer} note="Organisation" />}
                 {shown.attendees
-                  .filter((a) => a.email !== shown.organizer?.email)
+                  .filter((a) => !a.email || a.email !== shown.organizer?.email)
                   .map((a) => (
                     <Person key={a.email ?? a.name} person={a} />
                   ))}
@@ -89,6 +96,13 @@ export function EventDetails({ event, calendar, incognito, onOpenLink }: Props) 
           {shown.description && (
             <p className="whitespace-pre-wrap break-words text-muted-foreground">
               {shown.description}
+            </p>
+          )}
+
+          {draft && (
+            <p className="border-t pt-4 text-xs text-muted-foreground">
+              <kbd className="font-mono">⇧↵</kbd> speichern · <kbd className="font-mono">e</kbd>{' '}
+              bearbeiten · <kbd className="font-mono">Esc</kbd> verwerfen
             </p>
           )}
         </div>

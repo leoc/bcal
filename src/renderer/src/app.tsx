@@ -1,15 +1,22 @@
 import { useCalendarController } from '@fullcalendar/react'
 import deLocale from '@fullcalendar/react/locales/de'
-import type { CalendarEvent, CalendarInfo, Config, DateRange, ViewName } from '@shared/types'
+import type {
+  CalendarEvent,
+  CalendarInfo,
+  Config,
+  DateRange,
+  Person,
+  ViewName,
+} from '@shared/types'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarSidebar } from '@/components/calendar-sidebar'
+import { CommandPalette, type PaletteMode } from '@/components/command-palette'
 import { EventCalendar } from '@/components/event-calendar'
 import { EventDetails } from '@/components/event-details'
-import { GotoDialog } from '@/components/goto-dialog'
 import { KeymapHelp } from '@/components/keymap-help'
-import { SearchDialog } from '@/components/search-dialog'
 import { arrange, isVisible, pressGroup, showAll, type Visibility } from '@/lib/calendars'
 import { contrastFor } from '@/lib/color'
+import { buildDraft, DRAFT_ID, draftAsEvent, handleFor, toNewEvent } from '@/lib/draft'
 import { toDate } from '@/lib/format'
 import { type Action, buildBindings, resolve } from '@/lib/keymap'
 
@@ -53,12 +60,20 @@ function Calendar({
   const [help, setHelp] = useState(false)
   // hides titles and details, e.g. for screen sharing; not persisted
   const [incognito, setIncognito] = useState(false)
-  const [gotoOpen, setGotoOpen] = useState(false)
-  const [searchOpen, setSearchOpen] = useState(false)
   const [focusedId, setFocusedId] = useState<string>()
   // set when j/k ran off the visible range: focus first/last once the next one loaded
   const [pending, setPending] = useState<{ edge: 'first' | 'last'; from: string }>()
   const [revision, setRevision] = useState(0)
+
+  // palette and the draft typed in it
+  const [palette, setPalette] = useState<PaletteMode>()
+  const [line, setLine] = useState('')
+  const [chosen, setChosen] = useState<Record<string, Person>>({})
+  const [videoCode, setVideoCode] = useState(newVideoCode)
+  // the draft stays after Enter until saved or discarded
+  const [draftActive, setDraftActive] = useState(false)
+  const [lastCreated, setLastCreated] = useState<string>()
+  const [toast, setToast] = useState<string>()
 
   useEffect(() => window.api.onChange(() => setRevision((r) => r + 1)), [])
 
@@ -71,6 +86,12 @@ function Calendar({
       window.api.events(range).then((events) => setLoaded({ range, events }))
   }, [range, revision])
 
+  useEffect(() => {
+    if (!toast) return
+    const timer = setTimeout(() => setToast(undefined), 6000)
+    return () => clearTimeout(timer)
+  }, [toast])
+
   const groups = useMemo(() => arrange(calendars, config), [calendars, config])
   const ordered = useMemo(() => groups.flatMap((g) => g.calendars), [groups])
   const byId = useMemo(() => new Map(calendars.map((c) => [c.id, c])), [calendars])
@@ -79,6 +100,29 @@ function Calendar({
     (calendar: CalendarInfo) => isVisible(calendar, config, visibility),
     [config, visibility],
   )
+
+  const draft = useMemo(
+    () =>
+      line.trim() && calendars.length
+        ? buildDraft(line, { calendars, config, chosen, videoCode })
+        : undefined,
+    [line, calendars, config, chosen, videoCode],
+  )
+  // in the mixed palette only lines that read like an event become a draft
+  const lineOpen = palette === 'create' || (palette === 'all' && Boolean(draft?.quick.explicit))
+  const draftEvent = useMemo(
+    () => (draft && (draftActive || lineOpen) ? draftAsEvent(draft, config) : undefined),
+    [draft, draftActive, lineOpen, config],
+  )
+
+  // move the calendar behind the palette to where the draft lands
+  useEffect(() => {
+    if (!draftEvent || !range) return
+    const start = toDate(draftEvent.start)
+    if (start >= new Date(range.start) && start < new Date(range.end)) return
+    const timer = setTimeout(() => controller.gotoDate(start), 250)
+    return () => clearTimeout(timer)
+  }, [draftEvent, range, controller])
 
   /** visible events in chronological order, the order j/k walks */
   const shown = useMemo(() => {
@@ -126,6 +170,54 @@ function Calendar({
     [updateVisibility],
   )
 
+  const discardDraft = useCallback(() => {
+    setLine('')
+    setChosen({})
+    setDraftActive(false)
+    setVideoCode(newVideoCode())
+  }, [])
+
+  const closePalette = useCallback(() => {
+    setPalette(undefined)
+    // a line that never became a draft is thrown away
+    if (!draftActive) discardDraft()
+  }, [draftActive, discardDraft])
+
+  const save = useCallback(async () => {
+    if (!draft) return
+    const input = toNewEvent(draft, config)
+    if (!input) return
+    try {
+      const created = await window.api.create(input)
+      const calendar = byId.get(input.calendarId)
+      if (calendar && !visible(calendar)) toggle(calendar)
+      discardDraft()
+      setPalette(undefined)
+      setLastCreated(created.path)
+      setFocusedId(created.id)
+      setDetails(true)
+      controller.gotoDate(draft.quick.start)
+      const invited = input.attendees.filter((a) => a.email).length
+      setToast(
+        `Gespeichert${invited ? ` · Einladung an ${invited} ${invited === 1 ? 'Person' : 'Personen'}` : ''} · u zurücknehmen`,
+      )
+    } catch (error) {
+      setToast(`Speichern fehlgeschlagen: ${reason(error)}`)
+    }
+  }, [draft, config, byId, visible, toggle, discardDraft, controller])
+
+  const undo = useCallback(async () => {
+    if (!lastCreated) return
+    try {
+      await window.api.undo(lastCreated)
+      setLastCreated(undefined)
+      setFocusedId(undefined)
+      setToast('Zurückgenommen (liegt in ~/_nobackup/_deletable/bcal)')
+    } catch (error) {
+      setToast(`Zurücknehmen fehlgeschlagen: ${reason(error)}`)
+    }
+  }, [lastCreated])
+
   const moveFocus = useCallback(
     (step: 1 | -1) => {
       // before the visible range loaded, an empty list would page away
@@ -151,8 +243,8 @@ function Calendar({
     [shown, focusedId, range, loaded, controller],
   )
 
-  useEffect(() => {
-    const run = (action: Action) => {
+  const run = useCallback(
+    (action: Action) => {
       if (action === 'prev') controller.prev()
       else if (action === 'next') controller.next()
       else if (action === 'today') controller.today()
@@ -164,14 +256,20 @@ function Calendar({
       else if (action === 'focus:prev') moveFocus(-1)
       else if (action === 'details') setDetails((d) => !d)
       else if (action === 'open-link') {
-        const link = focused?.links[0]
+        const link = (draftEvent ?? focused)?.links[0]
         if (link) window.api.openLink(link)
-      } else if (action === 'goto') setGotoOpen(true)
-      else if (action === 'search') setSearchOpen(true)
+      } else if (action === 'palette') setPalette('all')
+      else if (action === 'new' || (action === 'edit-draft' && draftActive)) setPalette('create')
+      else if (action === 'command') setPalette('command')
+      else if (action === 'goto') setPalette('goto')
+      else if (action === 'search') setPalette('search')
+      else if (action === 'save' && draftActive) save()
+      else if (action === 'undo') undo()
       else if (action === 'toggle:sidebar') setSidebar((s) => !s)
       else if (action === 'help') setHelp((h) => !h)
       else if (action === 'close') {
         if (help) setHelp(false)
+        else if (draftActive) discardDraft()
         else setFocusedId(undefined)
       } else if (action === 'incognito') setIncognito((i) => !i)
       else if (action === 'groups:all') updateVisibility(() => showAll(groups))
@@ -179,7 +277,23 @@ function Calendar({
         const index = Number(action.split(':')[1])
         updateVisibility((_, visibleIn) => pressGroup(groups, index, visibleIn))
       }
-    }
+    },
+    [
+      controller,
+      moveFocus,
+      draftEvent,
+      focused,
+      draftActive,
+      save,
+      undo,
+      help,
+      discardDraft,
+      updateVisibility,
+      groups,
+    ],
+  )
+
+  useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const action = resolve(bindings, event)
       if (!action) return
@@ -188,25 +302,69 @@ function Calendar({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [controller, groups, updateVisibility, bindings, moveFocus, focused, help])
+  }, [bindings, run])
 
-  const calendarEvents = useMemo(
-    () =>
-      shown.map((e) => {
-        const color = byId.get(e.calendarId)?.color
-        return {
-          id: e.id,
-          title: incognito ? 'Termin' : e.title,
-          start: e.start,
-          end: e.end,
-          allDay: e.allDay,
-          color,
-          contrastColor: contrastFor(color),
-          className: e.id === focusedId ? 'bcal-focused' : undefined,
-        }
-      }),
-    [shown, byId, focusedId, incognito],
-  )
+  const commands = useMemo(() => {
+    const keyFor = (action: Action) => bindings.find((b) => b.action === action)?.key
+    const entries: [Action, string][] = [
+      ['new', 'Neuer Termin'],
+      ['goto', 'Gehe zu Datum'],
+      ['search', 'Termine suchen'],
+      ['today', 'Heute'],
+      ['view:week', 'Ansicht: Woche'],
+      ['view:month', 'Ansicht: Monat'],
+      ['view:day', 'Ansicht: Tag'],
+      ['view:list', 'Ansicht: Agenda'],
+      ['groups:all', 'Alle Kalender zeigen'],
+      ['incognito', incognito ? 'Inkognito aus' : 'Inkognito an'],
+      ['toggle:sidebar', 'Seitenleiste ein/aus'],
+      ['details', 'Details ein/aus'],
+      ...(draftActive ? ([['save', 'Entwurf speichern']] as [Action, string][]) : []),
+      ...(lastCreated ? ([['undo', 'Letzten Termin zurücknehmen']] as [Action, string][]) : []),
+      ['help', 'Tastenkürzel'],
+    ]
+    return entries.map(([action, label]) => ({
+      id: action,
+      label,
+      hint: keyFor(action),
+      run: () => {
+        setPalette(undefined)
+        run(action)
+      },
+    }))
+  }, [bindings, run, incognito, draftActive, lastCreated])
+
+  const calendarEvents = useMemo(() => {
+    const events = shown.map((e) => {
+      const color = byId.get(e.calendarId)?.color
+      return {
+        id: e.id,
+        title: incognito ? 'Termin' : e.title,
+        start: e.start,
+        end: e.end,
+        allDay: e.allDay,
+        color,
+        contrastColor: contrastFor(color),
+        className: e.id === focusedId ? 'bcal-focused' : undefined,
+      }
+    })
+    if (draftEvent) {
+      const color = byId.get(draftEvent.calendarId)?.color
+      events.push({
+        id: draftEvent.id,
+        title: incognito ? 'Termin' : draftEvent.title,
+        start: draftEvent.start,
+        end: draftEvent.end,
+        allDay: draftEvent.allDay,
+        color,
+        contrastColor: contrastFor(color),
+        className: 'bcal-draft',
+      })
+    }
+    return events
+  }, [shown, byId, focusedId, incognito, draftEvent])
+
+  const panelEvent = draftEvent ?? focused
 
   return (
     <div className="flex h-full">
@@ -237,6 +395,7 @@ function Calendar({
             info.el.dataset.bcalId = info.event.id
           }}
           eventClick={(info) => {
+            if (info.event.id === DRAFT_ID) return
             setFocusedId(info.event.id)
             setDetails(true)
           }}
@@ -245,36 +404,63 @@ function Calendar({
           }
         />
       </main>
-      {details && (
+      {(details || draftEvent) && (
         <EventDetails
-          event={focused}
-          calendar={focused && byId.get(focused.calendarId)}
+          event={panelEvent}
+          calendar={panelEvent && byId.get(panelEvent.calendarId)}
+          draft={Boolean(draftEvent)}
           incognito={incognito}
           onOpenLink={(url) => window.api.openLink(url)}
         />
       )}
-      <SearchDialog
-        open={searchOpen}
-        calendars={byId}
-        incognito={incognito}
-        onSelect={(event) => {
-          const calendar = byId.get(event.calendarId)
-          if (calendar && !visible(calendar)) toggle(calendar)
-          controller.gotoDate(toDate(event.start))
-          setFocusedId(event.id)
-          setDetails(true)
-        }}
-        onClose={() => setSearchOpen(false)}
-      />
-      <GotoDialog
-        open={gotoOpen}
-        current={controller.getDate() ?? new Date()}
-        onGoto={(date) => controller.gotoDate(date)}
-        onClose={() => setGotoOpen(false)}
-      />
+      {palette && (
+        <CommandPalette
+          mode={palette}
+          onMode={setPalette}
+          line={line}
+          onLine={setLine}
+          draft={draft}
+          draftEvent={draftEvent}
+          calendars={ordered}
+          byId={byId}
+          incognito={incognito}
+          commands={commands}
+          onPerson={(person, next) => {
+            setChosen((c) => ({ ...c, [handleFor(person).toLowerCase()]: person }))
+            setLine(next)
+          }}
+          onDraft={() => {
+            setDraftActive(true)
+            setPalette(undefined)
+          }}
+          onSave={save}
+          onSearchHit={(event) => {
+            const calendar = byId.get(event.calendarId)
+            if (calendar && !visible(calendar)) toggle(calendar)
+            closePalette()
+            controller.gotoDate(toDate(event.start))
+            setFocusedId(event.id)
+            setDetails(true)
+          }}
+          onGoto={(date) => {
+            closePalette()
+            controller.gotoDate(date)
+          }}
+          onClose={closePalette}
+        />
+      )}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg border bg-popover px-4 py-2 text-sm shadow-lg">
+          {toast}
+        </div>
+      )}
       {help && <KeymapHelp bindings={bindings} onClose={() => setHelp(false)} />}
     </div>
   )
+}
+
+function newVideoCode(): string {
+  return crypto.randomUUID().replace(/-/g, '').slice(0, 20)
 }
 
 function useDarkMode() {
@@ -285,4 +471,12 @@ function useDarkMode() {
     query.addEventListener('change', apply)
     return () => query.removeEventListener('change', apply)
   }, [])
+}
+
+/** The message of an IPC error without Electron's "Error invoking remote method" prefix. */
+function reason(error: unknown): string {
+  return String((error as Error)?.message ?? error).replace(
+    /^Error invoking remote method '[^']+': (Error: )?/,
+    '',
+  )
 }

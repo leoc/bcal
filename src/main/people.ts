@@ -19,7 +19,8 @@ export function parseVcards(text: string): Person[] {
         .filter((line) => new RegExp(`^${name}[;:]`, 'i').test(line))
         .map((line) => line.slice(line.indexOf(':') + 1).trim())
         .filter(Boolean)
-    const name = field('FN')[0]?.replace(/\\,/g, ',')
+    const fn = field('FN')[0]?.replace(/\\,/g, ',')
+    const name = fn?.includes('@') ? undefined : fn
     const emails = field('EMAIL')
     if (!name && !emails.length) return []
     return emails.length ? emails.map((email) => ({ name, email })) : [{ name }]

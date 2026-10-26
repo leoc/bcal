@@ -15,6 +15,12 @@ export type Action =
   | 'toggle:sidebar'
   | 'help'
   | 'close'
+  | 'palette'
+  | 'new'
+  | 'command'
+  | 'edit-draft'
+  | 'save'
+  | 'undo'
   | 'incognito'
   | 'groups:all'
   | `group:${number}`
@@ -42,6 +48,12 @@ const descriptions: Record<string, string> = {
   'toggle:sidebar': 'Seitenleiste',
   help: 'Tastenkürzel',
   close: 'Schließen',
+  palette: 'Palette',
+  new: 'Neuer Termin',
+  command: 'Befehle',
+  'edit-draft': 'Entwurf bearbeiten',
+  save: 'Entwurf speichern',
+  undo: 'Letzten Termin zurücknehmen',
   incognito: 'Inkognito (Titel ausblenden)',
   'groups:all': 'Alle Kalender',
 }
@@ -68,6 +80,13 @@ const defaults: [string, Action][] = [
   ['b', 'toggle:sidebar'],
   ['?', 'help'],
   ['Escape', 'close'],
+  ['Ctrl+k', 'palette'],
+  ['n', 'new'],
+  [':', 'command'],
+  ['>', 'command'],
+  ['e', 'edit-draft'],
+  ['Shift+Enter', 'save'],
+  ['u', 'undo'],
   ['x', 'incognito'],
   ['0', 'groups:all'],
   ...Array.from({ length: 9 }, (_, i): [string, Action] => [String(i + 1), `group:${i}`]),
@@ -94,9 +113,23 @@ export function buildBindings(overrides: Record<string, string> = {}): Binding[]
   return [...map].map(([key, action]) => ({ key, action, description: describe(action) }))
 }
 
+/** `Ctrl+k`, `Shift+Enter`, `?`: Shift only counts for named keys, it is part of characters. */
+export function keyName(event: KeyboardEvent): string {
+  const named = event.key.length > 1
+  return [
+    event.ctrlKey && 'Ctrl',
+    event.altKey && 'Alt',
+    event.metaKey && 'Meta',
+    event.shiftKey && named && 'Shift',
+    event.key,
+  ]
+    .filter(Boolean)
+    .join('+')
+}
+
 export function resolve(bindings: Binding[], event: KeyboardEvent): Action | undefined {
-  if (event.ctrlKey || event.altKey || event.metaKey) return undefined
   const target = event.target as HTMLElement | null
   if (target?.closest('input, textarea, [contenteditable="true"]')) return undefined
-  return bindings.find((b) => b.key === event.key)?.action
+  const name = keyName(event)
+  return bindings.find((b) => b.key === name)?.action
 }

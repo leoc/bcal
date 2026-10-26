@@ -47,7 +47,7 @@ function time(value: string, allDay: boolean): ICAL.Time {
 function addPerson(event: ICAL.Component, name: 'organizer' | 'attendee', person: Person) {
   if (!person.email) return
   const property = event.addPropertyWithValue(name, `mailto:${person.email}`)
-  if (person.name) property.setParameter('cn', person.name)
+  if (person.name && !person.name.includes('@')) property.setParameter('cn', person.name)
   if (name === 'attendee') {
     property.setParameter('role', 'REQ-PARTICIPANT')
     property.setParameter('partstat', 'NEEDS-ACTION')

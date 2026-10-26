@@ -1,5 +1,14 @@
 import { type FSWatcher, watch } from 'node:fs'
-import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
+import {
+  copyFile,
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  stat,
+  unlink,
+  writeFile,
+} from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import ICAL from 'ical.js'
@@ -208,7 +217,7 @@ export class Vdir {
       throw new Error('only events created in this session can be undone')
     const target = join(trash, path.slice(this.root.length).replace(/^\/+/, ''))
     await mkdir(join(target, '..'), { recursive: true })
-    await rename(path, target)
+    await move(path, target)
     this.created.delete(path)
     this.items = this.items.filter((item) => item.path !== path)
   }
@@ -295,5 +304,16 @@ function toEvent(
     organizer: person(component.getFirstProperty('organizer')),
     attendees: attendees(component),
     links: links(typeof url === 'string' ? url : undefined, item.location, item.description),
+  }
+}
+
+/** rename, or copy and remove across file systems (EXDEV) */
+async function move(from: string, to: string): Promise<void> {
+  try {
+    await rename(from, to)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error
+    await copyFile(from, to)
+    await unlink(from)
   }
 }

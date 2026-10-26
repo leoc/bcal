@@ -130,3 +130,11 @@
   outline-offset: 1px;
   z-index: 10;
 }
+
+/* unsaved draft from the palette */
+.bcal-draft {
+  opacity: 0.8;
+  outline: 2px dashed var(--foreground);
+  outline-offset: 1px;
+  z-index: 11;
+}

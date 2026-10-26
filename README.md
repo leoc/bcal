@@ -37,12 +37,40 @@ Nextcloud (CalDAV) <-> pimsync (HM service) <-> ~/.calendar/<account>/<collectio
 | `o`                  | open the event's first link                                        |
 | `Esc`                | clear focus / close                                                |
 | `g`                  | go to date (`fr`, `12.11.`, `kw 45`, `+3`, `nächsten Freitag`)     |
+| `Ctrl+K`             | palette: new event, commands (`>`), search (`/`)                   |
+| `n`                  | new event from one line (see below); `e` edits the draft           |
+| `Shift+Enter`        | save the draft (also right from the palette)                       |
+| `u`                  | take back the event just created                                   |
+| `:` / `>`            | commands                                                           |
 | `/`                  | search all events                                                  |
 | `1`–`9`              | show only that group; add-on groups (`toggle: true`) switch on/off |
 | `0`                  | show all calendars                                                 |
 | `x`                  | incognito: titles become "Termin", no names in details or search   |
 | `b`                  | toggle sidebar                                                     |
 | `?`                  | key help                                                           |
+
+## New events
+
+`n` opens the palette with one line, German or English:
+
+```
+nächsten Freitag 14 Uhr eine Stunde Kaffee @Simon #family video
+next friday 2pm 1h call @simon
+jeden Montag 9 Uhr Standup bis 18.12.
+morgen 14-15:30 Workshop im Büro
+```
+
+Date and time (chrono), duration (`1h`, `90min`, `eine Stunde`) or end
+(`14-15:30`, `bis 16 Uhr`), place (`in`, `im`, `bei`, `at` + capitalized
+words), recurrence (`jeden Montag`, `alle 2 Wochen`, `every monday`, `… bis
+18.12.`), `#calendar`, `@person` (Tab completes from contacts and past
+participants; people with an address get invited by the server) and
+`video`/`call` for a meet.example.org room. Without time it is all-day, without
+date today. Defaults live in `config.yml`.
+
+While typing, the draft shows dashed in the calendar and in the panel; Enter
+keeps it as a draft, `Shift+Enter` saves it as `<uid>.ics` and pimsync uploads
+it. `u` moves the event just created to `~/_nobackup/_deletable/bcal/`.
 
 ## Configuration
 

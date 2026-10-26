@@ -16,12 +16,23 @@ export function screenshotSize(): { width: number; height: number } {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-async function press(window: BrowserWindow, key: string): Promise<void> {
+/** `j`, `Enter`, `Space`, `Shift+Enter`, `Ctrl+k` */
+async function press(window: BrowserWindow, token: string): Promise<void> {
   const contents = window.webContents
-  contents.sendInputEvent({ type: 'keyDown', keyCode: key })
-  if (key.length === 1) contents.sendInputEvent({ type: 'char', keyCode: key })
-  contents.sendInputEvent({ type: 'keyUp', keyCode: key })
-  await sleep(250)
+  const parts = token.length > 1 ? token.split('+') : [token]
+  const key = parts.pop() ?? token
+  const modifiers = parts.map((m) => (m === 'Ctrl' ? 'control' : m.toLowerCase())) as (
+    | 'shift'
+    | 'control'
+    | 'alt'
+  )[]
+  const keyCode = key === 'Space' ? ' ' : key
+  contents.sendInputEvent({ type: 'keyDown', keyCode, modifiers })
+  if (keyCode.length === 1 && !modifiers.includes('control')) {
+    contents.sendInputEvent({ type: 'char', keyCode, modifiers })
+  }
+  contents.sendInputEvent({ type: 'keyUp', keyCode, modifiers })
+  await sleep(120)
 }
 
 export function captureAndQuit(window: BrowserWindow, path: string, quit: () => void): void {

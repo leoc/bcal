@@ -111,3 +111,11 @@ describe('activeToken', () => {
     expect(activeToken('mail@example.org')).toBeUndefined()
   })
 })
+
+describe('explicit', () => {
+  it('tells event-like lines from plain words', () => {
+    expect(parse('woche').explicit).toBe(false)
+    expect(parse('morgen Kaffee').explicit).toBe(true)
+    expect(parse('Kaffee @Simon').explicit).toBe(true)
+  })
+})

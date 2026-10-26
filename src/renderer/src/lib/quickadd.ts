@@ -13,6 +13,8 @@ export interface QuickAdd {
   location?: string
   /** RRULE value, e.g. `FREQ=WEEKLY;BYDAY=MO` */
   rrule?: string
+  /** the line named a date, time, person or calendar, so it reads like an event */
+  explicit: boolean
   /** `video`, `call` or `jitsi` was given */
   video: boolean
 }
@@ -331,5 +333,7 @@ export function parseQuickAdd(input: string, options: QuickAddOptions = {}): Qui
     title = title.replace(filler, '').trim()
   }
 
-  return { title, start, end, allDay, people, calendar, location, rrule, video }
+  const explicit =
+    used.length > 0 || people.length > 0 || calendar !== undefined || rrule !== undefined
+  return { title, start, end, allDay, people, calendar, location, rrule, video, explicit }
 }
