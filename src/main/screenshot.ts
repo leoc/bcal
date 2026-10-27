@@ -16,8 +16,26 @@ export function screenshotSize(): { width: number; height: number } {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-/** `j`, `Enter`, `Space`, `Shift+Enter`, `Ctrl+k` */
+/** Mouse drag in page pixels, e.g. `Drag:388,325>523,360`, in small steps like a hand. */
+async function drag(window: BrowserWindow, spec: string): Promise<void> {
+  const [from = [], to = []] = spec.split('>').map((p) => p.split(',').map(Number))
+  const [x1 = 0, y1 = 0] = from
+  const [x2 = 0, y2 = 0] = to
+  const contents = window.webContents
+  contents.sendInputEvent({ type: 'mouseDown', x: x1, y: y1, button: 'left', clickCount: 1 })
+  for (let i = 1; i <= 10; i++) {
+    const x = Math.round(x1 + ((x2 - x1) * i) / 10)
+    const y = Math.round(y1 + ((y2 - y1) * i) / 10)
+    contents.sendInputEvent({ type: 'mouseMove', x, y, button: 'left' })
+    await sleep(30)
+  }
+  contents.sendInputEvent({ type: 'mouseUp', x: x2, y: y2, button: 'left', clickCount: 1 })
+  await sleep(300)
+}
+
+/** `j`, `Enter`, `Space`, `Shift+Enter`, `Ctrl+k`, or `Drag:x,y>x,y` */
 async function press(window: BrowserWindow, token: string): Promise<void> {
+  if (token.startsWith('Drag:')) return drag(window, token.slice(5))
   const contents = window.webContents
   const parts = token.length > 1 ? token.split('+') : [token]
   const key = parts.pop() ?? token

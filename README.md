@@ -38,9 +38,11 @@ Nextcloud (CalDAV) <-> pimsync (HM service) <-> ~/.calendar/<account>/<collectio
 | `Esc`                | clear focus / close                                                |
 | `g`                  | go to date (`fr`, `12.11.`, `kw 45`, `+3`, `nächsten Freitag`)     |
 | `Ctrl+K`             | palette: new event, commands (`>`), search (`/`)                   |
-| `n`                  | new event from one line (see below); `e` edits the draft           |
+| `n`                  | new event from one line (see below)                                |
+| `e`                  | edit the focused event as a line, or reopen the draft              |
 | `Shift+Enter`        | save the draft (also right from the palette)                       |
-| `u`                  | take back the event just created                                   |
+| `D`, `Delete`        | delete the focused event (asks first)                              |
+| `u`                  | take back the last write (new, changed or deleted event)           |
 | `:` / `>`            | commands                                                           |
 | `/`                  | search all events                                                  |
 | `1`–`9`              | show only that group; add-on groups (`toggle: true`) switch on/off |
@@ -80,6 +82,25 @@ send the typed place words to photon.komoot.io.
 While typing, the draft shows dashed in the calendar and in the panel; Enter
 keeps it as a draft, `Shift+Enter` saves it as `<uid>.ics` and pimsync uploads
 it. `u` moves the event just created to `~/_nobackup/_deletable/bcal/`.
+
+## Changing events
+
+`e` on the focused event opens it as a line, e.g. `29.10.2026 14:00 90min
+Kaffee in Café Kranzler @SimonMüller`; its place and people count as picked, so
+the full address, `GEO` and invitations survive. Change what you like (`#family`
+moves it to another calendar) and save with `Shift+Enter`. Dragging or resizing
+an event in the calendar changes its time the same way.
+
+For a series bcal asks: only this occurrence (an override with
+`RECURRENCE-ID`), this and the following ones (the series ends before, a new one
+starts here) or all of them (moved by as much as this occurrence moved).
+`D`/`Delete` asks the same for series and otherwise confirms once.
+
+bcal edits the file's own component: alarms, unknown and `X-` properties and
+the reply state of attendees stay; `SEQUENCE` goes up so the server sends updates
+or cancellations. Events organized by someone else can only be deleted, which
+takes them out of your calendar. Removed files go to `~/_nobackup/_deletable/bcal/`;
+`u` takes back the last write of the session, one after the other.
 
 ## Configuration
 

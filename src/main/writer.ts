@@ -4,7 +4,7 @@ import type { NewEvent, Person } from '../shared/types'
 
 // Embedded so other clients do not have to know the zone; the only zone bcal
 // writes for now (falls back to UTC for anything else).
-const BERLIN = `BEGIN:VTIMEZONE
+export const BERLIN = `BEGIN:VTIMEZONE
 TZID:Europe/Berlin
 BEGIN:DAYLIGHT
 TZNAME:CEST
@@ -29,7 +29,7 @@ export interface WriteOptions {
   timezone?: string
 }
 
-function time(value: string, allDay: boolean): ICAL.Time {
+export function time(value: string, allDay: boolean): ICAL.Time {
   const [date = '', clock = '00:00:00'] = value.split('T')
   const [year, month, day] = date.split('-').map(Number)
   const [hour, minute, second] = clock.split(':').map(Number)
@@ -44,7 +44,7 @@ function time(value: string, allDay: boolean): ICAL.Time {
   })
 }
 
-function addPerson(event: ICAL.Component, name: 'organizer' | 'attendee', person: Person) {
+export function addPerson(event: ICAL.Component, name: 'organizer' | 'attendee', person: Person) {
   if (!person.email) return
   const property = event.addPropertyWithValue(name, `mailto:${person.email}`)
   if (person.name && !person.name.includes('@')) property.setParameter('cn', person.name)

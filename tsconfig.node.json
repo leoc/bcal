@@ -24,6 +24,7 @@
     "src/renderer/src/lib/calendars.ts",
     "src/renderer/src/lib/quickadd.ts",
     "src/renderer/src/lib/draft.ts",
+    "src/renderer/src/lib/edit.ts",
     "test/**/*",
     "electron.vite.config.ts",
     "vitest.config.mts"

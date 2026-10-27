@@ -19,6 +19,7 @@ export type Action =
   | 'new'
   | 'command'
   | 'edit-draft'
+  | 'delete'
   | 'save'
   | 'undo'
   | 'incognito'
@@ -51,9 +52,10 @@ const descriptions: Record<string, string> = {
   palette: 'Palette',
   new: 'Neuer Termin',
   command: 'Befehle',
-  'edit-draft': 'Entwurf bearbeiten',
+  'edit-draft': 'Bearbeiten (Termin oder Entwurf)',
+  delete: 'Termin löschen',
   save: 'Entwurf speichern',
-  undo: 'Letzten Termin zurücknehmen',
+  undo: 'Letzte Änderung zurücknehmen',
   incognito: 'Inkognito (Titel ausblenden)',
   'groups:all': 'Alle Kalender',
 }
@@ -85,6 +87,8 @@ const defaults: [string, Action][] = [
   [':', 'command'],
   ['>', 'command'],
   ['e', 'edit-draft'],
+  ['Delete', 'delete'],
+  ['D', 'delete'],
   ['Shift+Enter', 'save'],
   ['u', 'undo'],
   ['x', 'incognito'],

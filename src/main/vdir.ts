@@ -1,4 +1,4 @@
-import { type FSWatcher, watch } from 'node:fs'
+import { existsSync, type FSWatcher, watch } from 'node:fs'
 import {
   copyFile,
   mkdir,
@@ -10,23 +10,41 @@ import {
   writeFile,
 } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import ICAL from 'ical.js'
 import type {
   CalendarEvent,
   CalendarInfo,
   Created,
   DateRange,
+  EventInput,
+  EventRef,
   Geo,
   NewEvent,
   Person,
+  Scope,
 } from '../shared/types'
 import { attendees, links, person } from './details'
+import { deleteEvent, type EditOptions, editEvent, registerTimezones } from './editor'
 import { parseGeo } from './places'
 import { buildIcs, type WriteOptions } from './writer'
 
 // Safety net for open-ended RRULEs that start long before the range.
 const MAX_OCCURRENCES = 100_000
+
+interface Change {
+  path: string
+  /** new text; null removes the file (into the trash) */
+  ics: string | null
+  /** a new file; it must not exist yet */
+  fresh?: boolean
+}
+
+interface Written {
+  path: string
+  /** the text before; null when the file was new */
+  before: string | null
+}
 
 interface Item {
   calendarId: string
@@ -41,11 +59,15 @@ interface Item {
 export class Vdir {
   private calendarList: CalendarInfo[] = []
   private items: Item[] = []
-  /** files written in this session; only these may be undone */
-  private created = new Set<string>()
+  /** writes of this session, newest last, for undo */
+  private history: { label: string; files: Written[] }[] = []
   private watcher?: FSWatcher
 
-  constructor(private readonly root: string) {}
+  constructor(
+    private readonly root: string,
+    /** where removed files go; nothing is deleted for good */
+    private readonly trash = join(homedir(), '_nobackup', '_deletable', 'bcal'),
+  ) {}
 
   async load(): Promise<void> {
     const calendars: CalendarInfo[] = []
@@ -108,7 +130,14 @@ export class Vdir {
         const occurrence = event.getOccurrenceDetails(next)
         if (!overlaps(occurrence.startDate, occurrence.endDate, rangeStart, rangeEnd)) continue
         result.push(
-          toEvent(calendarId, event, occurrence.startDate, occurrence.endDate, occurrence.item),
+          toEvent(
+            calendarId,
+            event,
+            occurrence.startDate,
+            occurrence.endDate,
+            occurrence.item,
+            next,
+          ),
         )
       }
     }
@@ -130,8 +159,8 @@ export class Vdir {
     for (const { calendarId, event } of this.items) {
       const haystack = [event.summary, event.location, event.description].join('\n').toLowerCase()
       if (!words.every((w) => haystack.includes(w))) continue
-      const [start, end, item] = this.representative(event, nowTime)
-      const result = toEvent(calendarId, event, start, end, item)
+      const [start, end, item, recurrenceId] = this.representative(event, nowTime)
+      const result = toEvent(calendarId, event, start, end, item, recurrenceId)
       if ((end ?? start).compare(nowTime) >= 0) upcoming.push(result)
       else past.push(result)
     }
@@ -139,7 +168,10 @@ export class Vdir {
     return [...upcoming.sort(byStart), ...past.sort((a, b) => byStart(b, a))].slice(0, limit)
   }
 
-  private representative(event: ICAL.Event, now: ICAL.Time): [ICAL.Time, ICAL.Time, ICAL.Event] {
+  private representative(
+    event: ICAL.Event,
+    now: ICAL.Time,
+  ): [ICAL.Time, ICAL.Time, ICAL.Event, ICAL.Time?] {
     if (!event.isRecurring()) return [event.startDate, event.endDate, event]
     const iterator = event.iterator()
     let last: ICAL.Time | undefined
@@ -154,7 +186,7 @@ export class Vdir {
       if (end.compare(now) >= 0) break
     }
     const occurrence = event.getOccurrenceDetails(last ?? event.startDate)
-    return [occurrence.startDate, occurrence.endDate, occurrence.item]
+    return [occurrence.startDate, occurrence.endDate, occurrence.item, last ?? event.startDate]
   }
 
   /**
@@ -202,33 +234,120 @@ export class Vdir {
 
   /** Writes a new event as `<uid>.ics` into its calendar; pimsync uploads it. */
   async create(input: NewEvent, options: WriteOptions = {}): Promise<Created> {
-    if (!this.calendarList.some((c) => c.id === input.calendarId)) {
-      throw new Error(`unknown calendar ${input.calendarId}`)
-    }
+    this.calendar(input.calendarId)
     const { uid, ics } = buildIcs(input, options)
     const path = join(this.root, input.calendarId, `${uid}.ics`)
-    await writeFile(path, ics, { flag: 'wx' })
-    this.created.add(path)
-    // show it right away instead of waiting for the watcher's reload
-    this.items.push(...(await parseFile(path, input.calendarId)))
+    await this.write('Neuer Termin', [{ path, ics, fresh: true }])
     return { id: `${input.calendarId}/${uid}/${input.start}`, path }
   }
 
   /**
-   * Takes back an event created in this session: the file moves to the
-   * deletable area (restorable), pimsync then deletes it remotely.
+   * Changes an event in its file (see `editEvent`). A new calendar moves the
+   * whole event: written there, removed here.
    */
-  async undo(
-    path: string,
-    trash = join(homedir(), '_nobackup', '_deletable', 'bcal'),
-  ): Promise<void> {
-    if (!this.created.has(path))
-      throw new Error('only events created in this session can be undone')
-    const target = join(trash, path.slice(this.root.length).replace(/^\/+/, ''))
+  async update(
+    ref: EventRef,
+    input: EventInput,
+    scope: Scope,
+    options: EditOptions = {},
+  ): Promise<Created> {
+    const item = this.find(ref)
+    this.calendar(input.calendarId)
+    const moving = input.calendarId !== ref.calendarId
+    if (moving && item.event.isRecurring() && scope !== 'all') {
+      throw new Error('Kalender wechselt nur die ganze Serie')
+    }
+    const result = editEvent(await readFile(item.path, 'utf8'), ref, input, scope, options)
+    const changes: Change[] = []
+    if (moving) {
+      const target = join(this.root, input.calendarId, basename(item.path))
+      changes.push({ path: target, ics: result.ics, fresh: true }, { path: item.path, ics: null })
+    } else {
+      changes.push({ path: item.path, ics: result.ics })
+    }
+    if (result.split) {
+      const path = join(this.root, input.calendarId, `${result.split.uid}.ics`)
+      changes.push({ path, ics: result.split.ics, fresh: true })
+    }
+    await this.write('Änderung', changes)
+    return { id: `${input.calendarId}/${result.uid}/${result.start}`, path: changes[0]?.path ?? '' }
+  }
+
+  /** Deletes an event, one occurrence, or a series from an occurrence on. */
+  async remove(ref: EventRef, scope: Scope, options: EditOptions = {}): Promise<void> {
+    const item = this.find(ref)
+    const ics = deleteEvent(await readFile(item.path, 'utf8'), ref, scope, options)
+    await this.write('Löschen', [{ path: item.path, ics }])
+  }
+
+  /**
+   * Takes back the last write of this session: changed files get their old
+   * text back, new ones move to the trash, deleted ones come back.
+   * Returns what was undone, or undefined when there is nothing left.
+   */
+  async undo(): Promise<string | undefined> {
+    const last = this.history.pop()
+    if (!last) return undefined
+    for (const { path, before } of [...last.files].reverse()) {
+      if (before === null) await this.trashFile(path)
+      else await atomicWrite(path, before)
+    }
+    await this.refresh(last.files.map((f) => f.path))
+    return last.label
+  }
+
+  private calendar(id: string): CalendarInfo {
+    const calendar = this.calendarList.find((c) => c.id === id)
+    if (!calendar) throw new Error(`unknown calendar ${id}`)
+    return calendar
+  }
+
+  private find(ref: EventRef): Item {
+    const item = this.items.find((i) => i.calendarId === ref.calendarId && i.event.uid === ref.uid)
+    if (!item) throw new Error('Termin nicht gefunden (inzwischen geändert?)')
+    return item
+  }
+
+  /**
+   * Applies changes and remembers the files as they were, for undo. `null`
+   * removes a file: it moves to the trash, nothing is deleted for good.
+   */
+  private async write(label: string, changes: Change[]): Promise<void> {
+    const files: Written[] = []
+    for (const change of changes) {
+      const before = change.fresh ? null : await readFile(change.path, 'utf8')
+      if (change.fresh && existsSync(change.path)) throw new Error(`${change.path} exists`)
+      if (change.ics === null) await this.trashFile(change.path)
+      else await atomicWrite(change.path, change.ics)
+      files.push({ path: change.path, before })
+    }
+    this.history.push({ label, files })
+    if (this.history.length > 50) this.history.shift()
+    // show the result right away instead of waiting for the watcher's reload
+    await this.refresh(changes.map((c) => c.path))
+  }
+
+  private async trashFile(path: string): Promise<void> {
+    let target = join(this.trash, path.slice(this.root.length).replace(/^\/+/, ''))
+    if (existsSync(target)) target = `${target}.${Date.now()}`
     await mkdir(join(target, '..'), { recursive: true })
     await move(path, target)
-    this.created.delete(path)
-    this.items = this.items.filter((item) => item.path !== path)
+  }
+
+  /** Re-reads the given files into the in-memory list. */
+  private async refresh(paths: string[]): Promise<void> {
+    const changed = new Set(paths)
+    this.items = this.items.filter((item) => !changed.has(item.path))
+    for (const path of changed) {
+      if (!existsSync(path)) continue
+      const calendarId = path
+        .slice(this.root.length)
+        .replace(/^\/+/, '')
+        .split('/')
+        .slice(0, 2)
+        .join('/')
+      this.items.push(...(await parseFile(path, calendarId)))
+    }
   }
 
   close(): void {
@@ -263,12 +382,7 @@ async function parseFile(path: string, calendarId: string): Promise<Item[]> {
   try {
     if (!(await stat(path)).isFile()) return []
     const root = new ICAL.Component(ICAL.parse(await readFile(path, 'utf8')))
-    for (const tz of root.getAllSubcomponents('vtimezone')) {
-      const tzid = tz.getFirstPropertyValue('tzid')
-      if (typeof tzid === 'string' && !ICAL.TimezoneService.has(tzid)) {
-        ICAL.TimezoneService.register(tz)
-      }
-    }
+    registerTimezones(root)
     const vevents = root.getAllSubcomponents('vevent')
     const master = vevents.find((v) => !v.hasProperty('recurrence-id'))
     // A file without master holds only detached overrides: show each as is.
@@ -292,6 +406,7 @@ function toEvent(
   start: ICAL.Time,
   end: ICAL.Time,
   item: ICAL.Event,
+  recurrenceId?: ICAL.Time,
 ): CalendarEvent {
   const allDay = start.isDate
   const format = (t: ICAL.Time) => (allDay ? t.toString() : t.toJSDate().toISOString())
@@ -302,6 +417,8 @@ function toEvent(
   return {
     id: `${calendarId}/${master.uid}/${start.toString()}`,
     calendarId,
+    uid: master.uid,
+    recurrenceId: recurrenceId?.toString(),
     title: item.summary || '(ohne Titel)',
     start: format(start),
     end: format(end ?? start),
@@ -332,4 +449,11 @@ async function move(from: string, to: string): Promise<void> {
     await copyFile(from, to)
     await unlink(from)
   }
+}
+
+/** Writes through a hidden temp file, so pimsync never reads half a file. */
+async function atomicWrite(path: string, text: string): Promise<void> {
+  const temp = join(path, '..', `.${basename(path)}.${process.pid}.tmp`)
+  await writeFile(temp, text)
+  await rename(temp, path)
 }

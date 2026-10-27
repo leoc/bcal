@@ -4,10 +4,13 @@ import type {
   Config,
   Created,
   DateRange,
+  EventInput,
+  EventRef,
   Geo,
   NewEvent,
   Person,
   Place,
+  Scope,
 } from './types'
 
 export interface Api {
@@ -25,8 +28,12 @@ export interface Api {
   mapPlaces: (query: string) => Promise<Place[]>
   /** coordinates for an address, e.g. a contact without GEO */
   geocode: (address: string) => Promise<Geo | undefined>
-  /** takes back an event created in this session (moves it to the trash) */
-  undo: (path: string) => Promise<void>
+  /** changes an event; `scope` matters for series only; refused for events of others */
+  update: (ref: EventRef, input: EventInput, scope: Scope) => Promise<Created>
+  /** deletes an event (into the trash), one occurrence, or a series from here on */
+  remove: (ref: EventRef, scope: Scope) => Promise<void>
+  /** takes back the last write of this session; what it was, or undefined if none */
+  undo: () => Promise<string | undefined>
   /** fires when files in the vdir changed (pimsync wrote something) */
   onChange: (listener: () => void) => () => void
   /** fires when config.yml was saved */

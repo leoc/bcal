@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
-import type { Config, DateRange, NewEvent } from '../shared/types'
+import type { Config, DateRange, EventInput, EventRef, NewEvent, Scope } from '../shared/types'
 import { loadConfig, watchConfig } from './config'
 import { type Candidate, mergePeople, parseVcards, rankPeople, readVcards } from './people'
 import { eventPlaces, Photon, type PlaceCandidate, parseVcardPlaces, rankPlaces } from './places'
@@ -36,7 +36,11 @@ const loadPlaces = async () => {
 let config: Config
 
 // Keep Chromium's caches out of ~/.config/bcal, which holds only config.yml.
-const stateDir = join(process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'), 'bcal')
+// Screenshot runs (often on test data) keep their toggles apart.
+const stateDir = join(
+  process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'),
+  screenshotPath ? 'bcal-screenshot' : 'bcal',
+)
 app.setPath('userData', stateDir)
 const visibility = new State<Record<string, boolean>>(stateDir, 'visibility', {})
 
@@ -99,9 +103,19 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle('places:map', (_event, query: string) => photon.search(query))
   ipcMain.handle('places:geocode', (_event, address: string) => photon.geocode(address))
-  ipcMain.handle('vdir:undo', async (_event, path: string) => {
-    await vdir.undo(path)
+  ipcMain.handle('vdir:update', async (_event, ref: EventRef, input: EventInput, scope: Scope) => {
+    const updated = await vdir.update(ref, input, scope, { organizer: config.organizer })
     window?.webContents.send('vdir:changed')
+    return updated
+  })
+  ipcMain.handle('vdir:remove', async (_event, ref: EventRef, scope: Scope) => {
+    await vdir.remove(ref, scope, { organizer: config.organizer })
+    window?.webContents.send('vdir:changed')
+  })
+  ipcMain.handle('vdir:undo', async () => {
+    const undone = await vdir.undo()
+    window?.webContents.send('vdir:changed')
+    return undone
   })
   ipcMain.handle('shell:open', (_event, url: string) => {
     if (/^https?:\/\//.test(url)) return shell.openExternal(url)

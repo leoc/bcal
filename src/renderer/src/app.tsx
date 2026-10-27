@@ -5,12 +5,15 @@ import type {
   CalendarInfo,
   Config,
   DateRange,
+  EventInput,
   Person,
   Place,
+  Scope,
   ViewName,
 } from '@shared/types'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CalendarSidebar } from '@/components/calendar-sidebar'
+import { Choice, type ChoiceOption } from '@/components/choice'
 import { CommandPalette, type PaletteMode } from '@/components/command-palette'
 import { EventCalendar } from '@/components/event-calendar'
 import { EventDetails } from '@/components/event-details'
@@ -25,6 +28,7 @@ import {
   placeAddress,
   toNewEvent,
 } from '@/lib/draft'
+import { editLine, isLocked, movedInput, toEditInput } from '@/lib/edit'
 import { toDate } from '@/lib/format'
 import { type Action, buildBindings, resolve } from '@/lib/keymap'
 
@@ -83,7 +87,17 @@ function Calendar({
   const [videoCode, setVideoCode] = useState(newVideoCode)
   // the draft stays after Enter until saved or discarded
   const [draftActive, setDraftActive] = useState(false)
-  const [lastCreated, setLastCreated] = useState<string>()
+  // the event the line edits; unset while creating a new one
+  const [editing, setEditing] = useState<CalendarEvent>()
+  // a question in place of the palette: series scope, delete confirmation
+  const [choice, setChoice] = useState<{
+    title: string
+    note?: string
+    options: ChoiceOption[]
+    onPick: (id: string) => void
+    onCancel?: () => void
+  }>()
+  const [canUndo, setCanUndo] = useState(false)
   const [toast, setToast] = useState<string>()
 
   useEffect(() => window.api.onChange(() => setRevision((r) => r + 1)), [])
@@ -115,9 +129,16 @@ function Calendar({
   const draft = useMemo(
     () =>
       line.trim() && calendars.length
-        ? buildDraft(line, { calendars, config, chosen, places: chosenPlaces, videoCode })
+        ? buildDraft(line, {
+            calendars,
+            config,
+            chosen,
+            places: chosenPlaces,
+            videoCode,
+            calendarId: editing?.calendarId,
+          })
         : undefined,
-    [line, calendars, config, chosen, chosenPlaces, videoCode],
+    [line, calendars, config, chosen, chosenPlaces, videoCode, editing],
   )
   // in the mixed palette only lines that read like an event become a draft
   const lineOpen = palette === 'create' || (palette === 'all' && Boolean(draft?.quick.explicit))
@@ -138,18 +159,22 @@ function Calendar({
   /** visible events in chronological order, the order j/k walks */
   const shown = useMemo(() => {
     const rank = new Map(ordered.map((c, i) => [c.id, i]))
-    return (loaded?.events ?? [])
-      .filter((e) => {
-        const calendar = byId.get(e.calendarId)
-        return calendar !== undefined && visible(calendar)
-      })
-      .sort(
-        (a, b) =>
-          toDate(a.start).getTime() - toDate(b.start).getTime() ||
-          Number(b.allDay) - Number(a.allDay) ||
-          (rank.get(a.calendarId) ?? 0) - (rank.get(b.calendarId) ?? 0),
-      )
-  }, [loaded, byId, visible, ordered])
+    return (
+      (loaded?.events ?? [])
+        .filter((e) => {
+          const calendar = byId.get(e.calendarId)
+          return calendar !== undefined && visible(calendar)
+        })
+        // while edited, the draft stands in for the event
+        .filter((e) => !(draftEvent && editing && e.id === editing.id))
+        .sort(
+          (a, b) =>
+            toDate(a.start).getTime() - toDate(b.start).getTime() ||
+            Number(b.allDay) - Number(a.allDay) ||
+            (rank.get(a.calendarId) ?? 0) - (rank.get(b.calendarId) ?? 0),
+        )
+    )
+  }, [loaded, byId, visible, ordered, draftEvent, editing])
 
   const focused = shown.find((e) => e.id === focusedId)
 
@@ -186,6 +211,7 @@ function Calendar({
     setChosen({})
     setChosenPlaces({})
     setDraftActive(false)
+    setEditing(undefined)
     setVideoCode(newVideoCode())
   }, [])
 
@@ -195,8 +221,73 @@ function Calendar({
     if (!draftActive) discardDraft()
   }, [draftActive, discardDraft])
 
+  /** For a series asks which occurrences `act` applies to; others go straight to `all`. */
+  const withScope = useCallback(
+    (
+      event: CalendarEvent,
+      verb: { title: string; destructive?: boolean; note?: string },
+      act: (scope: Scope) => void,
+      onCancel?: () => void,
+    ) => {
+      if (!event.rrule) return act('all')
+      setChoice({
+        title: verb.title,
+        note: verb.note,
+        options: [
+          { id: 'this', label: 'Nur dieser Termin', destructive: verb.destructive },
+          { id: 'following', label: 'Dieser und alle folgenden', destructive: verb.destructive },
+          { id: 'all', label: 'Alle Termine der Serie', destructive: verb.destructive },
+        ],
+        onPick: (id) => {
+          setChoice(undefined)
+          act(id as Scope)
+        },
+        onCancel: () => {
+          setChoice(undefined)
+          onCancel?.()
+        },
+      })
+    },
+    [],
+  )
+
+  /** Writes a change to `event`; `revert` undoes a drag on failure or cancel. */
+  const update = useCallback(
+    (event: CalendarEvent, input: EventInput, revert?: () => void) =>
+      withScope(
+        event,
+        { title: `„${incognito ? 'Termin' : event.title}“ ändern` },
+        async (scope) => {
+          try {
+            const updated = await window.api.update(
+              { calendarId: event.calendarId, uid: event.uid, recurrenceId: event.recurrenceId },
+              input,
+              scope,
+            )
+            const calendar = byId.get(input.calendarId)
+            if (calendar && !visible(calendar)) toggle(calendar)
+            discardDraft()
+            setPalette(undefined)
+            setCanUndo(true)
+            setFocusedId(updated.id)
+            setToast('Geändert · u zurücknehmen')
+          } catch (error) {
+            revert?.()
+            setToast(`Ändern fehlgeschlagen: ${reason(error)}`)
+          }
+        },
+        revert,
+      ),
+    [withScope, incognito, byId, visible, toggle, discardDraft],
+  )
+
   const save = useCallback(async () => {
     if (!draft) return
+    if (editing) {
+      const input = toEditInput(draft, editing, config)
+      if (input) update(editing, input)
+      return
+    }
     const input = toNewEvent(draft, config)
     if (!input) return
     try {
@@ -205,7 +296,7 @@ function Calendar({
       if (calendar && !visible(calendar)) toggle(calendar)
       discardDraft()
       setPalette(undefined)
-      setLastCreated(created.path)
+      setCanUndo(true)
       setFocusedId(created.id)
       setDetails(true)
       controller.gotoDate(draft.quick.start)
@@ -216,19 +307,93 @@ function Calendar({
     } catch (error) {
       setToast(`Speichern fehlgeschlagen: ${reason(error)}`)
     }
-  }, [draft, config, byId, visible, toggle, discardDraft, controller])
+  }, [draft, editing, update, config, byId, visible, toggle, discardDraft, controller])
+
+  /** `e`: the focused event becomes the line, as if typed. */
+  const startEdit = useCallback(
+    (event: CalendarEvent) => {
+      if (isLocked(event, config)) {
+        setToast(
+          `Organisiert von ${event.organizer?.name ?? event.organizer?.email}: nur löschen möglich (D)`,
+        )
+        return
+      }
+      const { line: next, chosen: people, places } = editLine(event, config)
+      setEditing(event)
+      setLine(next)
+      setChosen(people)
+      setChosenPlaces(places)
+      setDraftActive(false)
+      setPalette('create')
+    },
+    [config],
+  )
+
+  const remove = useCallback(
+    (event: CalendarEvent) => {
+      const title = incognito ? 'Termin' : event.title
+      const note = isLocked(event, config)
+        ? 'Du organisierst ihn nicht: er verschwindet nur aus deinem Kalender.'
+        : event.attendees.some((a) => a.email && a.email !== config.organizer?.email)
+          ? 'Die Teilnehmer bekommen eine Absage.'
+          : undefined
+      const act = async (scope: Scope) => {
+        try {
+          await window.api.remove(
+            { calendarId: event.calendarId, uid: event.uid, recurrenceId: event.recurrenceId },
+            scope,
+          )
+          setCanUndo(true)
+          setFocusedId(undefined)
+          setToast('Gelöscht · u zurücknehmen')
+        } catch (error) {
+          setToast(`Löschen fehlgeschlagen: ${reason(error)}`)
+        }
+      }
+      if (event.rrule) {
+        withScope(event, { title: `„${title}“ löschen`, destructive: true, note }, act)
+        return
+      }
+      setChoice({
+        title: `„${title}“ löschen?`,
+        note,
+        options: [{ id: 'all', label: 'Löschen', destructive: true }],
+        onPick: () => {
+          setChoice(undefined)
+          act('all')
+        },
+        onCancel: () => setChoice(undefined),
+      })
+    },
+    [incognito, config, withScope],
+  )
 
   const undo = useCallback(async () => {
-    if (!lastCreated) return
     try {
-      await window.api.undo(lastCreated)
-      setLastCreated(undefined)
-      setFocusedId(undefined)
-      setToast('Zurückgenommen (liegt in ~/_nobackup/_deletable/bcal)')
+      const undone = await window.api.undo()
+      setToast(undone ? `Zurückgenommen: ${undone}` : 'Nichts zum Zurücknehmen')
+      if (!undone) setCanUndo(false)
     } catch (error) {
       setToast(`Zurücknehmen fehlgeschlagen: ${reason(error)}`)
     }
-  }, [lastCreated])
+  }, [])
+
+  /** A dragged or resized event: FullCalendar already shows it there. */
+  const onMoved = useCallback(
+    (info: {
+      event: { id: string; start: Date | null; end: Date | null; allDay: boolean }
+      revert: () => void
+    }) => {
+      const event = shown.find((e) => e.id === info.event.id)
+      if (!event || !info.event.start || isLocked(event, config)) return info.revert()
+      update(
+        event,
+        movedInput(event, info.event.start, info.event.end, info.event.allDay),
+        info.revert,
+      )
+    },
+    [shown, config, update],
+  )
 
   const moveFocus = useCallback(
     (step: 1 | -1) => {
@@ -271,7 +436,14 @@ function Calendar({
         const link = (draftEvent ?? focused)?.links[0]
         if (link) window.api.openLink(link)
       } else if (action === 'palette') setPalette('all')
-      else if (action === 'new' || (action === 'edit-draft' && draftActive)) setPalette('create')
+      else if (action === 'new') {
+        // a fresh line, unless a draft waits for more
+        if (editing && !draftActive) discardDraft()
+        setPalette('create')
+      } else if (action === 'edit-draft') {
+        if (draftActive) setPalette('create')
+        else if (focused) startEdit(focused)
+      } else if (action === 'delete' && focused && !draftEvent) remove(focused)
       else if (action === 'command') setPalette('command')
       else if (action === 'goto') setPalette('goto')
       else if (action === 'search') setPalette('search')
@@ -296,6 +468,9 @@ function Calendar({
       draftEvent,
       focused,
       draftActive,
+      editing,
+      startEdit,
+      remove,
       save,
       undo,
       help,
@@ -332,7 +507,13 @@ function Calendar({
       ['toggle:sidebar', 'Seitenleiste ein/aus'],
       ['details', 'Details ein/aus'],
       ...(draftActive ? ([['save', 'Entwurf speichern']] as [Action, string][]) : []),
-      ...(lastCreated ? ([['undo', 'Letzten Termin zurücknehmen']] as [Action, string][]) : []),
+      ...(focused && !draftActive
+        ? ([
+            ['edit-draft', 'Termin bearbeiten'],
+            ['delete', 'Termin löschen'],
+          ] as [Action, string][])
+        : []),
+      ...(canUndo ? ([['undo', 'Letzte Änderung zurücknehmen']] as [Action, string][]) : []),
       ['help', 'Tastenkürzel'],
     ]
     return entries.map(([action, label]) => ({
@@ -344,7 +525,7 @@ function Calendar({
         run(action)
       },
     }))
-  }, [bindings, run, incognito, draftActive, lastCreated])
+  }, [bindings, run, incognito, draftActive, canUndo, focused])
 
   const calendarEvents = useMemo(() => {
     const events = shown.map((e) => {
@@ -358,6 +539,8 @@ function Calendar({
         color,
         contrastColor: contrastFor(color),
         className: e.id === focusedId ? 'bcal-focused' : undefined,
+        // others' events and hidden titles stay put
+        editable: !incognito && !isLocked(e, config),
       }
     })
     if (draftEvent) {
@@ -371,10 +554,11 @@ function Calendar({
         color,
         contrastColor: contrastFor(color),
         className: 'bcal-draft',
+        editable: false,
       })
     }
     return events
-  }, [shown, byId, focusedId, incognito, draftEvent])
+  }, [shown, byId, focusedId, incognito, draftEvent, config])
 
   const panelEvent = draftEvent ?? focused
 
@@ -411,6 +595,9 @@ function Calendar({
             setFocusedId(info.event.id)
             setDetails(true)
           }}
+          editable
+          eventDrop={onMoved}
+          eventResize={onMoved}
           datesSet={(info) =>
             setRange({ start: info.start.toISOString(), end: info.end.toISOString() })
           }
@@ -426,9 +613,10 @@ function Calendar({
           onOpenLink={(url) => window.api.openLink(url)}
         />
       )}
-      {palette && (
+      {palette && !choice && (
         <CommandPalette
           mode={palette}
+          editing={Boolean(editing)}
           onMode={setPalette}
           line={line}
           onLine={setLine}
@@ -471,6 +659,15 @@ function Calendar({
             controller.gotoDate(date)
           }}
           onClose={closePalette}
+        />
+      )}
+      {choice && (
+        <Choice
+          title={choice.title}
+          note={choice.note}
+          options={choice.options}
+          onPick={choice.onPick}
+          onCancel={choice.onCancel ?? (() => setChoice(undefined))}
         />
       )}
       {toast && (

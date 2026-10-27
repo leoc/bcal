@@ -29,6 +29,8 @@ export interface PaletteCommand {
 
 interface Props {
   mode: PaletteMode
+  /** the line edits an existing event instead of creating one */
+  editing?: boolean
   onMode: (mode: PaletteMode) => void
   /** the quick-add line; lives in the app because the draft outlives the palette */
   line: string
@@ -68,7 +70,7 @@ const placeholders: Record<PaletteMode, string> = {
 }
 
 export function CommandPalette(props: Props) {
-  const { mode, line, draft, draftEvent, incognito } = props
+  const { mode, line, draft, draftEvent, incognito, editing } = props
   const input = useRef<HTMLInputElement>(null)
   const root = useRef<HTMLDivElement>(null)
   const [query, setQuery] = useState('')
@@ -261,7 +263,7 @@ export function CommandPalette(props: Props) {
       <Command shouldFilter={false} value={current} onValueChange={setSelected} loop>
         <div className="flex items-center gap-2 border-b px-3">
           <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-            {labels[mode]}
+            {editing && mode === 'create' ? 'Bearbeiten' : labels[mode]}
           </span>
           <input
             ref={input}
@@ -317,7 +319,7 @@ export function CommandPalette(props: Props) {
           )}
 
           {showCreate && draft && draftEvent && (
-            <CommandGroup heading="Neuer Termin">
+            <CommandGroup heading={editing ? 'Änderung' : 'Neuer Termin'}>
               <CommandItem
                 value="create"
                 onSelect={props.onDraft}

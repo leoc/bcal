@@ -34,10 +34,12 @@ export function pickCalendar(
   ref: string | undefined,
   calendars: CalendarInfo[],
   config: Config,
+  /** used without `#`; an edited event stays in its calendar */
+  fallback?: string,
 ): CalendarInfo | undefined {
   const find = (r: string | undefined) =>
     r ? calendars.find((c) => matchesCalendar(c, r)) : undefined
-  return find(ref) ?? find(config.defaultCalendar) ?? calendars[0]
+  return find(ref) ?? find(fallback) ?? find(config.defaultCalendar) ?? calendars[0]
 }
 
 export function buildDraft(
@@ -49,6 +51,8 @@ export function buildDraft(
     chosen: Record<string, Person>
     /** places chosen from completion, by name (lower case) */
     places?: Record<string, Place>
+    /** calendar of the edited event, kept unless the line names another */
+    calendarId?: string
     videoCode: string
     now?: Date
   },
@@ -61,7 +65,7 @@ export function buildDraft(
   return {
     line,
     quick,
-    calendar: pickCalendar(quick.calendar, context.calendars, context.config),
+    calendar: pickCalendar(quick.calendar, context.calendars, context.config, context.calendarId),
     people: quick.people.map((token) => ({ token, person: context.chosen[token.toLowerCase()] })),
     video: quick.video ? `https://meet.example.org/${context.videoCode}` : undefined,
     place: quick.location ? context.places?.[quick.location.toLowerCase()] : undefined,
@@ -116,6 +120,7 @@ export function draftAsEvent(draft: Draft, config: Config): CalendarEvent | unde
   if (!event) return undefined
   return {
     id: DRAFT_ID,
+    uid: DRAFT_ID,
     calendarId: event.calendarId,
     title: event.title,
     start: draft.quick.allDay ? event.start : draft.quick.start.toISOString(),

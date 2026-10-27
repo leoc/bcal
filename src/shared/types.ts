@@ -20,6 +20,9 @@ export interface CalendarEvent {
   /** calendar, UID and occurrence start, unique per occurrence */
   id: string
   calendarId: string
+  uid: string
+  /** original start of this occurrence of a series (RECURRENCE-ID), as ical.js prints it */
+  recurrenceId?: string
   title: string
   /** ISO date-time, or `YYYY-MM-DD` for all-day events */
   start: string
@@ -124,3 +127,16 @@ export interface Place {
   geo?: Geo
   source: PlaceSource
 }
+
+/** Which event, and for a series which occurrence. */
+export interface EventRef {
+  calendarId: string
+  uid: string
+  recurrenceId?: string
+}
+
+/** For a series: only this occurrence, the whole series, or this and the following. */
+export type Scope = 'this' | 'all' | 'following'
+
+/** The fields an edit sets; alarms, X-properties and everything else stay as they are. */
+export type EventInput = Omit<NewEvent, 'alarm'>
