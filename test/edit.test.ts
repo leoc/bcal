@@ -20,6 +20,7 @@ const config: Config = {
   defaultAlarm: 15,
   organizer: { name: 'Arthur', email: 'arthur@example.org' },
   video: 'https://meet.example.org',
+  emails: [],
   places: [],
   near: { lat: 52.52, lon: 13.405 },
 }

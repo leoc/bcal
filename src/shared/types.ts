@@ -71,6 +71,8 @@ export interface Config {
   defaultAlarm?: number
   /** who invites when a new event has attendees */
   organizer?: Person
+  /** further own addresses: invitations to them are mine to answer */
+  emails: string[]
   /** meeting room base URL for `video`; the line gets a random room appended */
   video?: string
   /** own places offered after `bei`/`in`/`im`/`at` */
@@ -142,3 +144,54 @@ export type Scope = 'this' | 'all' | 'following'
 
 /** The fields an edit sets; alarms, X-properties and everything else stay as they are. */
 export type EventInput = Omit<NewEvent, 'alarm'>
+
+/** My answer to an invitation. */
+export type Partstat = 'ACCEPTED' | 'TENTATIVE' | 'DECLINED'
+
+/**
+ * What an opened `.ics` does to one event: `new` adds it, `update` replaces
+ * the copy in a calendar, `outdated` would replace a newer copy (lower
+ * SEQUENCE), `cancel` removes it, `gone` cancels something not in any calendar.
+ */
+export type ImportKind = 'new' | 'update' | 'outdated' | 'cancel' | 'gone'
+
+export interface ImportItem {
+  uid: string
+  kind: ImportKind
+  /** the incoming event, as the calendar would show it (its first occurrence) */
+  event: CalendarEvent
+  /** the copy already in a calendar, for update, outdated and cancel */
+  existing?: CalendarEvent
+  /** someone else organizes and I am an attendee: answer with a PARTSTAT */
+  invitation: boolean
+  /** my current answer in the file or in the existing copy */
+  partstat?: string
+  /** other events this one probably replaces (re-sent invitation with a new UID) */
+  superseded: Superseded[]
+}
+
+export interface Superseded {
+  event: CalendarEvent
+  /** same organizer and the same title: checked by default */
+  strong: boolean
+}
+
+export interface ImportPlan {
+  /** handle for `importApply` */
+  id: string
+  /** file name, for the dialog */
+  name: string
+  method?: string
+  items: ImportItem[]
+  /** set instead of items when the file cannot be read */
+  error?: string
+}
+
+export interface ImportDecision {
+  uid: string
+  /** target for new events; update and cancel act where the event is */
+  calendarId?: string
+  partstat?: Partstat
+  /** superseded events to remove along with the import */
+  remove: EventRef[]
+}

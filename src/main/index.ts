@@ -1,8 +1,19 @@
+import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
-import type { Config, DateRange, EventInput, EventRef, NewEvent, Scope } from '../shared/types'
+import type {
+  Config,
+  DateRange,
+  EventInput,
+  EventRef,
+  ImportDecision,
+  ImportPlan,
+  NewEvent,
+  Scope,
+} from '../shared/types'
 import { loadConfig, watchConfig } from './config'
+import { filesIn, readOpened, revealOnHyprland } from './opened'
 import { type Candidate, mergePeople, parseVcards, rankPeople, readVcards } from './people'
 import { eventPlaces, Photon, type PlaceCandidate, parseVcardPlaces, rankPlaces } from './places'
 import { captureAndQuit, screenshotPath, screenshotSize } from './screenshot'
@@ -43,6 +54,33 @@ const stateDir = join(
 )
 app.setPath('userData', stateDir)
 const visibility = new State<Record<string, boolean>>(stateDir, 'visibility', {})
+
+// One bcal per state dir: a second start hands its files over and quits.
+if (!screenshotPath && !app.requestSingleInstanceLock()) app.exit(0)
+
+// opened .ics files waiting for the renderer, and their text by plan id
+let imports: ImportPlan[] = []
+const importTexts = new Map<string, string>()
+const me = () => [config.organizer?.email, ...config.emails].filter((e): e is string => Boolean(e))
+
+async function openFiles(paths: string[]): Promise<void> {
+  for (const path of paths) {
+    const id = randomUUID()
+    try {
+      const { name, text } = await readOpened(path)
+      importTexts.set(id, text)
+      imports.push({ id, name, ...vdir.planImport(text, me()) })
+    } catch (error) {
+      imports.push({ id, name: path, items: [], error: String((error as Error).message ?? error) })
+    }
+  }
+  window?.webContents.send('import:changed')
+  if (window) {
+    window.show()
+    window.focus()
+  }
+  revealOnHyprland()
+}
 
 const theme = process.env.BCAL_THEME
 if (theme === 'dark' || theme === 'light') nativeTheme.themeSource = theme
@@ -117,6 +155,18 @@ app.whenReady().then(async () => {
     window?.webContents.send('vdir:changed')
     return undone
   })
+  ipcMain.handle('import:take', () => {
+    const taken = imports
+    imports = []
+    return taken
+  })
+  ipcMain.handle('import:apply', async (_event, id: string, decisions: ImportDecision[]) => {
+    const text = importTexts.get(id)
+    if (text === undefined) throw new Error('Import nicht mehr da')
+    const created = await vdir.applyImport(text, decisions, me())
+    window?.webContents.send('vdir:changed')
+    return created
+  })
   ipcMain.handle('shell:open', (_event, url: string) => {
     if (/^https?:\/\//.test(url)) return shell.openExternal(url)
   })
@@ -136,8 +186,19 @@ app.whenReady().then(async () => {
       window?.webContents.send('config:changed')
     })
   }
+  app.on('second-instance', (_event, argv, cwd) => {
+    const files = filesIn(argv, cwd, app.getAppPath())
+    if (files.length) openFiles(files)
+    else {
+      window?.show()
+      window?.focus()
+      revealOnHyprland()
+    }
+  })
   createWindow()
   setImmediate(() => vdir.warmUp())
+  const files = filesIn(process.argv, process.cwd(), app.getAppPath())
+  if (files.length) openFiles(files)
 })
 
 app.on('window-all-closed', () => {

@@ -103,6 +103,26 @@ or cancellations. Events organized by someone else can only be deleted, which
 takes them out of your calendar. Removed files go to `~/_nobackup/_deletable/bcal/`;
 `u` takes back the last write of the session, one after the other.
 
+## Opening .ics files
+
+`bcal invite.ics` (or `xdg-open` with bcal as handler for `text/calendar`, as
+the desktop entry declares) shows each event of the file as a draft and asks
+where it goes. A running bcal takes the file over from a second start.
+
+- New events: pick a calendar (default first, type to filter), Enter adds it.
+- Invitations to you (`organizer` or `emails:` in `config.yml`): Tab switches
+  between accept, tentative and decline; your copy carries the answer so the
+  server can reply to the organizer.
+- An event already in a calendar (same UID) is updated there; one with a lower
+  `SEQUENCE` than your copy is flagged as older. `METHOD:CANCEL` offers to
+  delete it, a cancelled occurrence of a series becomes an `EXDATE`.
+- Re-sent invitations often come with a new UID: events by the same organizer
+  with a similar title within two months are offered for deletion along with
+  the import (checked when the title matches). Enter on one toggles it.
+
+The `METHOD` line is dropped, alarms and other properties stay. `u` takes back
+the import and the deletions together.
+
 ## Configuration
 
 `~/.config/bcal/config.yml` (or `BCAL_CONFIG`) is written with commented

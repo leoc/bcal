@@ -8,8 +8,8 @@ import { cn } from '@/lib/utils'
 interface Props {
   event?: CalendarEvent
   calendar?: CalendarInfo
-  /** an unsaved draft from the palette */
-  draft?: boolean
+  /** an unsaved draft from the palette, or an event from an opened file */
+  draft?: 'draft' | 'import'
   /** the place highlighted in the palette, shown instead of the event's own */
   place?: Place
   /** show only calendar and time */
@@ -51,7 +51,7 @@ export function EventDetails({ event, calendar, draft, place, incognito, onOpenL
               {shown.status === 'CANCELLED' && <span className="text-destructive">abgesagt</span>}
               {draft && (
                 <span className="rounded border border-dashed px-1.5 text-[11px] text-foreground">
-                  Entwurf
+                  {draft === 'import' ? 'Import' : 'Entwurf'}
                 </span>
               )}
             </div>
@@ -130,7 +130,7 @@ export function EventDetails({ event, calendar, draft, place, incognito, onOpenL
             </p>
           )}
 
-          {draft && (
+          {draft === 'draft' && (
             <p className="border-t pt-4 text-xs text-muted-foreground">
               <kbd className="font-mono">⇧↵</kbd> speichern · <kbd className="font-mono">e</kbd>{' '}
               bearbeiten · <kbd className="font-mono">Esc</kbd> verwerfen

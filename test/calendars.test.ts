@@ -19,6 +19,7 @@ const config: Config = {
   hidden: ['birthdays'],
   keymap: {},
   defaultDuration: 60,
+  emails: [],
   places: [],
   near: { lat: 52.52, lon: 13.405 },
 }

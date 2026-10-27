@@ -37,6 +37,8 @@ keymap: { n: next, h: none }
       defaultDuration: 60,
       defaultAlarm: undefined,
       organizer: undefined,
+      emails: [],
+      video: undefined,
       places: [],
       near: { lat: 52.52, lon: 13.405 },
     })

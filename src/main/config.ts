@@ -17,6 +17,7 @@ export const defaultConfig: Config = {
   hidden: [],
   keymap: {},
   defaultDuration: 60,
+  emails: [],
   places: [],
   near: { lat: 52.52, lon: 13.405 },
 }
@@ -51,6 +52,8 @@ defaultDuration: 60
 defaultAlarm: 15
 # Invites go out from this address when a line names people (@Simon).
 # organizer: { name: Jane Doe, email: jane@example.org }
+# Further own addresses: invitations sent to them are answered as you.
+# emails: [jane.doe@example.com]
 # "video" in a line adds a meeting room: this URL plus a random room name.
 # video: https://meet.jit.si/
 
@@ -109,6 +112,7 @@ export function normalize(raw: unknown): Config {
     defaultDuration: positive(data.defaultDuration) ?? defaultConfig.defaultDuration,
     defaultAlarm: data.defaultAlarm === 0 ? 0 : positive(data.defaultAlarm),
     organizer: organizer(data.organizer),
+    emails: strings(data.emails).map((e) => e.toLowerCase()),
     video:
       typeof data.video === 'string' && /^https?:\/\//.test(data.video) ? data.video : undefined,
     places: Array.isArray(data.places) ? data.places.flatMap(place) : [],

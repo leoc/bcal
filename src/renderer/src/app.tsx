@@ -6,6 +6,8 @@ import type {
   Config,
   DateRange,
   EventInput,
+  ImportDecision,
+  ImportPlan,
   Person,
   Place,
   Scope,
@@ -17,6 +19,7 @@ import { Choice, type ChoiceOption } from '@/components/choice'
 import { CommandPalette, type PaletteMode } from '@/components/command-palette'
 import { EventCalendar } from '@/components/event-calendar'
 import { EventDetails } from '@/components/event-details'
+import { ImportDialog } from '@/components/import-dialog'
 import { KeymapHelp } from '@/components/keymap-help'
 import { arrange, isVisible, pressGroup, showAll, type Visibility } from '@/lib/calendars'
 import { contrastFor } from '@/lib/color'
@@ -25,6 +28,7 @@ import {
   DRAFT_ID,
   draftAsEvent,
   handleFor,
+  pickCalendar,
   placeAddress,
   toNewEvent,
 } from '@/lib/draft'
@@ -97,10 +101,25 @@ function Calendar({
     onPick: (id: string) => void
     onCancel?: () => void
   }>()
+  // opened .ics files, one event after the other; the target colors the preview
+  const [imports, setImports] = useState<ImportPlan[]>([])
+  const [importIndex, setImportIndex] = useState(0)
+  const [importTarget, setImportTarget] = useState<string>()
   const [canUndo, setCanUndo] = useState(false)
   const [toast, setToast] = useState<string>()
 
   useEffect(() => window.api.onChange(() => setRevision((r) => r + 1)), [])
+
+  useEffect(() => {
+    const take = () =>
+      window.api.takeImports().then((plans) => {
+        for (const plan of plans.filter((p) => p.error)) setToast(`${plan.name}: ${plan.error}`)
+        const usable = plans.filter((p) => !p.error && p.items.length)
+        if (usable.length) setImports((queue) => [...queue, ...usable])
+      })
+    take()
+    return window.api.onImport(take)
+  }, [])
 
   useEffect(() => {
     if (revision >= 0) window.api.calendars().then(setCalendars)
@@ -177,6 +196,41 @@ function Calendar({
   }, [loaded, byId, visible, ordered, draftEvent, editing])
 
   const focused = shown.find((e) => e.id === focusedId)
+
+  const importing = imports[0]
+  const importItem = importing?.items[importIndex]
+  // the incoming event, dashed like a draft; a cancellation points at the copy instead
+  const importEvent = useMemo(
+    () =>
+      importItem && importItem.kind !== 'cancel' && importItem.kind !== 'gone'
+        ? {
+            ...importItem.event,
+            id: DRAFT_ID,
+            calendarId: importTarget ?? importItem.event.calendarId,
+          }
+        : undefined,
+    [importItem, importTarget],
+  )
+  // the default calendar first
+  const importTargets = useMemo(() => {
+    const first = pickCalendar(undefined, ordered, config)
+    return first ? [first, ...ordered.filter((c) => c.id !== first.id)] : ordered
+  }, [ordered, config])
+
+  useEffect(() => {
+    if (!importItem) return
+    controller.gotoDate(toDate(importItem.event.start))
+    if (importItem.kind === 'cancel' && importItem.existing) setFocusedId(importItem.existing.id)
+  }, [importItem, controller])
+
+  const nextImport = useCallback(() => {
+    setImportTarget(undefined)
+    if (importing && importIndex + 1 < importing.items.length) setImportIndex(importIndex + 1)
+    else {
+      setImportIndex(0)
+      setImports((queue) => queue.slice(1))
+    }
+  }, [importing, importIndex])
 
   useEffect(() => {
     if (!pending || !loaded || loaded.range.start === pending.from) return
@@ -378,6 +432,33 @@ function Calendar({
     }
   }, [])
 
+  const applyImport = useCallback(
+    async (decision: ImportDecision) => {
+      if (!importing || !importItem) return
+      try {
+        const created = await window.api.applyImport(importing.id, [decision])
+        const calendar = decision.calendarId ? byId.get(decision.calendarId) : undefined
+        if (calendar && !visible(calendar)) toggle(calendar)
+        setCanUndo(true)
+        setFocusedId(importItem.kind === 'cancel' ? undefined : created?.id)
+        setDetails(true)
+        const done =
+          importItem.kind === 'cancel'
+            ? 'Gelöscht'
+            : importItem.kind === 'new'
+              ? `Hinzugefügt${calendar ? ` in ${calendar.name}` : ''}`
+              : 'Aktualisiert'
+        const removed = decision.remove.length
+        const along = removed ? ` · ${removed} abgelöste${removed === 1 ? 'r' : ''} gelöscht` : ''
+        setToast(`${done}${along} · u zurücknehmen`)
+        nextImport()
+      } catch (error) {
+        setToast(`Import fehlgeschlagen: ${reason(error)}`)
+      }
+    },
+    [importing, importItem, byId, visible, toggle, nextImport],
+  )
+
   /** A dragged or resized event: FullCalendar already shows it there. */
   const onMoved = useCallback(
     (info: {
@@ -543,14 +624,15 @@ function Calendar({
         editable: !incognito && !isLocked(e, config),
       }
     })
-    if (draftEvent) {
-      const color = byId.get(draftEvent.calendarId)?.color
+    const ghost = draftEvent ?? importEvent
+    if (ghost) {
+      const color = byId.get(ghost.calendarId)?.color
       events.push({
-        id: draftEvent.id,
-        title: incognito ? 'Termin' : draftEvent.title,
-        start: draftEvent.start,
-        end: draftEvent.end,
-        allDay: draftEvent.allDay,
+        id: ghost.id,
+        title: incognito ? 'Termin' : ghost.title,
+        start: ghost.start,
+        end: ghost.end,
+        allDay: ghost.allDay,
         color,
         contrastColor: contrastFor(color),
         className: 'bcal-draft',
@@ -558,9 +640,9 @@ function Calendar({
       })
     }
     return events
-  }, [shown, byId, focusedId, incognito, draftEvent, config])
+  }, [shown, byId, focusedId, incognito, draftEvent, importEvent, config])
 
-  const panelEvent = draftEvent ?? focused
+  const panelEvent = draftEvent ?? importEvent ?? focused
 
   return (
     <div className="flex h-full">
@@ -603,17 +685,17 @@ function Calendar({
           }
         />
       </main>
-      {(details || draftEvent) && (
+      {(details || draftEvent || importEvent) && (
         <EventDetails
           event={panelEvent}
           calendar={panelEvent && byId.get(panelEvent.calendarId)}
-          draft={Boolean(draftEvent)}
+          draft={draftEvent ? 'draft' : importEvent ? 'import' : undefined}
           place={palette ? previewPlace : undefined}
           incognito={incognito}
           onOpenLink={(url) => window.api.openLink(url)}
         />
       )}
-      {palette && !choice && (
+      {palette && !choice && !importItem && (
         <CommandPalette
           mode={palette}
           editing={Boolean(editing)}
@@ -659,6 +741,23 @@ function Calendar({
             controller.gotoDate(date)
           }}
           onClose={closePalette}
+        />
+      )}
+      {importItem && importing && !choice && (
+        <ImportDialog
+          key={`${importing.id}/${importIndex}`}
+          item={importItem}
+          source={
+            importing.items.length > 1
+              ? `${importing.name} · ${importIndex + 1}/${importing.items.length}`
+              : importing.name
+          }
+          calendars={importTargets}
+          byId={byId}
+          incognito={incognito}
+          onTarget={setImportTarget}
+          onApply={applyImport}
+          onSkip={nextImport}
         />
       )}
       {choice && (

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { existsSync, type FSWatcher, watch } from 'node:fs'
 import {
   copyFile,
@@ -20,12 +21,27 @@ import type {
   EventInput,
   EventRef,
   Geo,
+  ImportDecision,
+  ImportItem,
+  ImportKind,
+  ImportPlan,
   NewEvent,
   Person,
   Scope,
+  Superseded,
 } from '../shared/types'
 import { attendees, links, person } from './details'
-import { deleteEvent, type EditOptions, editEvent, registerTimezones } from './editor'
+import { deleteEvent, type EditOptions, editEvent, organizerOf, registerTimezones } from './editor'
+import {
+  cancelledText,
+  importedText,
+  isInvitation,
+  lead,
+  parseImport,
+  partstatOf,
+  sequenceOf,
+  titleSimilarity,
+} from './importer'
 import { parseGeo } from './places'
 import { buildIcs, type WriteOptions } from './writer'
 
@@ -296,6 +312,150 @@ export class Vdir {
     return last.label
   }
 
+  /**
+   * What importing `text` (an `.ics` from outside) would do, event by event.
+   * `me` are my addresses, for invitations.
+   */
+  planImport(text: string, me: string[]): Omit<ImportPlan, 'id' | 'name'> {
+    const parsed = parseImport(text)
+    const items = parsed.events.map((incoming): ImportItem => {
+      const first = lead(incoming)
+      const found = this.items.find((i) => i.event.uid === incoming.uid)
+      const event = preview(found?.calendarId ?? '', first)
+      const rid = first.getFirstPropertyValue('recurrence-id') as ICAL.Time | null
+      const current = found && (rid ? found.event.getOccurrenceDetails(rid) : undefined)
+      const existing = found
+        ? current
+          ? toEvent(
+              found.calendarId,
+              found.event,
+              current.startDate,
+              current.endDate,
+              current.item,
+              rid ?? undefined,
+            )
+          : toEvent(
+              found.calendarId,
+              found.event,
+              found.event.startDate,
+              found.event.endDate,
+              found.event,
+            )
+        : undefined
+      const theirs = current?.item.component ?? found?.event.component
+      const kind: ImportKind =
+        parsed.method === 'CANCEL'
+          ? found
+            ? 'cancel'
+            : 'gone'
+          : !found
+            ? 'new'
+            : theirs && sequenceOf(first) < sequenceOf(theirs)
+              ? 'outdated'
+              : 'update'
+      const known = theirs && partstatOf(theirs, me)
+      return {
+        uid: incoming.uid,
+        kind,
+        event,
+        existing,
+        invitation: parsed.method !== 'CANCEL' && isInvitation(first, me),
+        partstat: known && known !== 'NEEDS-ACTION' ? known : partstatOf(first, me),
+        superseded: parsed.method === 'CANCEL' ? [] : this.superseded(incoming.uid, first, event),
+      }
+    })
+    return { method: parsed.method, items }
+  }
+
+  /**
+   * Events that `incoming` probably replaces: same organizer, a similar
+   * title, within two months; a re-sent invitation often gets a new UID.
+   */
+  private superseded(uid: string, incoming: ICAL.Component, event: CalendarEvent): Superseded[] {
+    const organizer = organizerOf(incoming)
+    if (!organizer) return []
+    const start = new Date(event.start)
+    const window = 60 * 86_400_000
+    return this.items
+      .filter((i) => i.event.uid !== uid && organizerOf(i.event.component) === organizer)
+      .map((i) => ({ item: i, similarity: titleSimilarity(event.title, i.event.summary ?? '') }))
+      .filter(
+        ({ item, similarity }) =>
+          similarity >= 0.5 &&
+          Math.abs(item.event.startDate.toJSDate().getTime() - start.getTime()) <= window,
+      )
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, 5)
+      .map(({ item, similarity }) => ({
+        event: toEvent(
+          item.calendarId,
+          item.event,
+          item.event.startDate,
+          item.event.endDate,
+          item.event,
+        ),
+        strong: similarity === 1,
+      }))
+  }
+
+  /**
+   * Imports the decided events of `text` in one write, so one undo takes it
+   * all back, superseded events removed along with it included.
+   */
+  async applyImport(
+    text: string,
+    decisions: ImportDecision[],
+    me: string[],
+  ): Promise<Created | undefined> {
+    const parsed = parseImport(text)
+    // current text per file, as earlier decisions left it
+    const texts = new Map<string, string | null>()
+    const fresh = new Set<string>()
+    const current = async (path: string) =>
+      texts.has(path) ? (texts.get(path) ?? null) : await readFile(path, 'utf8')
+    let created: Created | undefined
+    for (const decision of decisions) {
+      const incoming = parsed.events.find((e) => e.uid === decision.uid)
+      if (!incoming) continue
+      const found = this.items.find((i) => i.event.uid === decision.uid)
+      const options = { partstat: decision.partstat, me }
+      if (parsed.method === 'CANCEL') {
+        if (!found) continue
+        const before = await current(found.path)
+        if (before !== null)
+          texts.set(found.path, cancelledText(incoming, before, found.calendarId))
+      } else if (found) {
+        const before = await current(found.path)
+        texts.set(found.path, importedText(parsed, incoming, before, options))
+        created ??= { id: preview(found.calendarId, lead(incoming)).id, path: found.path }
+      } else {
+        if (!decision.calendarId) throw new Error('Kein Kalender gewählt')
+        this.calendar(decision.calendarId)
+        const path = this.freePath(decision.calendarId, decision.uid)
+        texts.set(path, importedText(parsed, incoming, null, options))
+        fresh.add(path)
+        created ??= { id: preview(decision.calendarId, lead(incoming)).id, path }
+      }
+      for (const ref of decision.remove) {
+        const item = this.find(ref)
+        const before = await current(item.path)
+        if (before !== null)
+          texts.set(item.path, deleteEvent(before, { ...ref, recurrenceId: undefined }, 'all'))
+      }
+    }
+    const changes = [...texts].map(([path, ics]) => ({ path, ics, fresh: fresh.has(path) }))
+    if (changes.length) await this.write('Import', changes)
+    return created
+  }
+
+  /** `<uid>.ics` in the calendar, made safe as a file name and unique. */
+  private freePath(calendarId: string, uid: string): string {
+    const base = uid.replace(/[^\w@.-]+/g, '_').slice(0, 120) || randomUUID()
+    let path = join(this.root, calendarId, `${base}.ics`)
+    for (let n = 2; existsSync(path); n++) path = join(this.root, calendarId, `${base}-${n}.ics`)
+    return path
+  }
+
   private calendar(id: string): CalendarInfo {
     const calendar = this.calendarList.find((c) => c.id === id)
     if (!calendar) throw new Error(`unknown calendar ${id}`)
@@ -456,4 +616,11 @@ async function atomicWrite(path: string, text: string): Promise<void> {
   const temp = join(path, '..', `.${basename(path)}.${process.pid}.tmp`)
   await writeFile(temp, text)
   await rename(temp, path)
+}
+
+/** An event from outside as the calendar would show it: its first occurrence. */
+function preview(calendarId: string, component: ICAL.Component): CalendarEvent {
+  const event = new ICAL.Event(component)
+  const rid = component.getFirstPropertyValue('recurrence-id') as ICAL.Time | null
+  return toEvent(calendarId, event, event.startDate, event.endDate, event, rid ?? undefined)
 }

@@ -54,7 +54,11 @@
               desktopName = "bcal";
               genericName = "Calendar";
               comment = "Keyboard-driven calendar on a local vdir";
-              exec = "bcal";
+              exec = "bcal %F";
+              mimeTypes = [
+                "text/calendar"
+                "application/ics"
+              ];
               icon = "x-office-calendar";
               categories = [
                 "Office"

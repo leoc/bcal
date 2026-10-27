@@ -7,6 +7,8 @@ import type {
   EventInput,
   EventRef,
   Geo,
+  ImportDecision,
+  ImportPlan,
   NewEvent,
   Person,
   Place,
@@ -34,6 +36,12 @@ export interface Api {
   remove: (ref: EventRef, scope: Scope) => Promise<void>
   /** takes back the last write of this session; what it was, or undefined if none */
   undo: () => Promise<string | undefined>
+  /** .ics files opened with bcal since the last call (xdg-open, mu4e) */
+  takeImports: () => Promise<ImportPlan[]>
+  /** writes the decided events of an opened file; one undo takes it all back */
+  applyImport: (id: string, decisions: ImportDecision[]) => Promise<Created | undefined>
+  /** fires when a file was opened */
+  onImport: (listener: () => void) => () => void
   /** fires when files in the vdir changed (pimsync wrote something) */
   onChange: (listener: () => void) => () => void
   /** fires when config.yml was saved */
