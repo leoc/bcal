@@ -33,12 +33,11 @@ startView: week
 # are matched by display name, collection name or <account>/<collection>;
 # calendars in no group end up under "Weitere".
 groups:
-  - name: Arbeit
-    calendars:
-      [Work, Team]
-  - name: Privat
+  - name: Work
+    calendars: [Work, Team]
+  - name: Private
     calendars: [Personal, Family]
-  - name: Sonstiges
+  - name: Other
     toggle: true
     calendars: [Birthdays, Holidays]
 
@@ -51,12 +50,14 @@ defaultCalendar: Personal
 defaultDuration: 60
 defaultAlarm: 15
 # Invites go out from this address when a line names people (@Simon).
-organizer: { name: Arthur Andersen, email: arthur@example.org }
+# organizer: { name: Jane Doe, email: jane@example.org }
+# "video" in a line adds a meeting room: this URL plus a random room name.
+# video: https://meet.jit.si/
 
 # Places offered after "bei", "in", "im", "at" (besides contacts with an
 # address, past event locations and the OSM map search). geo is optional.
 places: []
-#  - name: Büro
+#  - name: Office
 #    address: Musterstraße 1, 10115 Berlin
 #    geo: [52.53, 13.38]
 # Map searches prefer places near this point.
@@ -108,6 +109,8 @@ export function normalize(raw: unknown): Config {
     defaultDuration: positive(data.defaultDuration) ?? defaultConfig.defaultDuration,
     defaultAlarm: data.defaultAlarm === 0 ? 0 : positive(data.defaultAlarm),
     organizer: organizer(data.organizer),
+    video:
+      typeof data.video === 'string' && /^https?:\/\//.test(data.video) ? data.video : undefined,
     places: Array.isArray(data.places) ? data.places.flatMap(place) : [],
     near: geo(data.near) ?? defaultConfig.near,
   }

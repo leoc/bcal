@@ -67,7 +67,8 @@ Date and time (chrono), duration (`1h`, `90min`, `eine Stunde`) or end
 words; `bei Friedi` also stays in the title), recurrence (`jeden Montag`, `alle 2 Wochen`, `every monday`, `… bis
 18.12.`), `#calendar`, `@person` (Tab completes from contacts and past
 participants; people with an address get invited by the server) and
-`video`/`call` for a meet.example.org room. Without time it is all-day, without
+`video`/`call` for a meeting room (`video:` URL in `config.yml`, plus a random
+room name). Without time it is all-day, without
 date today. Defaults live in `config.yml`.
 
 After `bei`, `in`, `im` or `at` the palette suggests places: contacts with an
@@ -107,7 +108,8 @@ takes them out of your calendar. Removed files go to `~/_nobackup/_deletable/bca
 `~/.config/bcal/config.yml` (or `BCAL_CONFIG`) is written with commented
 defaults on first start and reloaded on save: start view, sidebar groups (their
 order assigns the keys 1–9; `toggle: true` makes a group an add-on that its
-key switches on and off), calendars hidden by default, own places
+key switches on and off), calendars hidden by default, defaults for new events
+(calendar, duration, alarm, `organizer`, `video` room URL), own places
 (`places:` with `name`, optional `address` and `geo: [lat, lon]`), the point map
 searches prefer (`near:`, default Berlin), and key overrides
 (`<key>: <action>`, `none` unbinds). Toggles in the app win over `hidden` and

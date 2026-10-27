@@ -67,7 +67,10 @@ export function buildDraft(
     quick,
     calendar: pickCalendar(quick.calendar, context.calendars, context.config, context.calendarId),
     people: quick.people.map((token) => ({ token, person: context.chosen[token.toLowerCase()] })),
-    video: quick.video ? `https://meet.example.org/${context.videoCode}` : undefined,
+    video:
+      quick.video && context.config.video
+        ? `${context.config.video.replace(/\/?$/, '/')}${context.videoCode}`
+        : undefined,
     place: quick.location ? context.places?.[quick.location.toLowerCase()] : undefined,
   }
 }

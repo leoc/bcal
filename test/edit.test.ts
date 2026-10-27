@@ -19,6 +19,7 @@ const config: Config = {
   defaultDuration: 60,
   defaultAlarm: 15,
   organizer: { name: 'Arthur', email: 'arthur@example.org' },
+  video: 'https://meet.example.org',
   places: [],
   near: { lat: 52.52, lon: 13.405 },
 }
@@ -135,8 +136,7 @@ describe('round trip', () => {
     expect(roundTrip(event(), (l) => l.replace(' @SimonMüller', '')).input?.attendees).toEqual([])
     expect(roundTrip(event(), (l) => `${l} #family`).input?.calendarId).toBe('acc/family')
     expect(
-      roundTrip(event({ calendarId: 'acc/personal' }), (l) => `${l} #family`).input
-        ?.calendarId,
+      roundTrip(event({ calendarId: 'acc/personal' }), (l) => `${l} #family`).input?.calendarId,
     ).toBe('acc/family')
   })
 })

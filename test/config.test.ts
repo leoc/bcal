@@ -42,6 +42,13 @@ keymap: { n: next, h: none }
     })
   })
 
+  it('accepts only http(s) URLs for video rooms', () => {
+    expect(normalize({ video: 'https://meet.example.org/' }).video).toBe(
+      'https://meet.example.org/',
+    )
+    expect(normalize({ video: 'javascript:alert(1)' }).video).toBeUndefined()
+  })
+
   it('reads own places and the map center', () => {
     const config = normalize(
       parse(`

@@ -24,6 +24,7 @@ const config: Config = {
   defaultDuration: 60,
   defaultAlarm: 15,
   organizer: { name: 'Arthur', email: 'arthur@example.org' },
+  video: 'https://meet.example.org',
   places: [],
   near: { lat: 52.52, lon: 13.405 },
 }
@@ -36,6 +37,18 @@ describe('draft', () => {
   it('uses the default calendar unless # picks another', () => {
     expect(draft('morgen Kaffee').calendar?.name).toBe('Personal')
     expect(draft('morgen Kaffee #family').calendar?.name).toBe('family')
+  })
+
+  it('adds a meeting room only with a video URL in the config', () => {
+    expect(draft('morgen Call video').video).toBe('https://meet.example.org/abc123')
+    const plain = buildDraft('morgen Call video', {
+      calendars,
+      config: { ...config, video: undefined },
+      chosen: {},
+      videoCode: 'abc123',
+      now,
+    })
+    expect(plain.video).toBeUndefined()
   })
 
   it('resolves chosen people and turns the line into a NewEvent', () => {

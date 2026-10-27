@@ -71,6 +71,8 @@ export interface Config {
   defaultAlarm?: number
   /** who invites when a new event has attendees */
   organizer?: Person
+  /** meeting room base URL for `video`; the line gets a random room appended */
+  video?: string
   /** own places offered after `bei`/`in`/`im`/`at` */
   places: Place[]
   /** map searches prefer places near this point (default: Berlin) */
