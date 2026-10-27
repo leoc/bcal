@@ -1,8 +1,9 @@
-import type { CalendarEvent, CalendarInfo, Person } from '@shared/types'
+import type { CalendarEvent, CalendarInfo, Geo, Person, Place, PlaceSource } from '@shared/types'
 import {
   CalendarPlus,
   Command as CommandIcon,
   CornerDownLeft,
+  MapPin,
   Repeat,
   Search,
   Video,
@@ -10,7 +11,7 @@ import {
 import { type KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { MiniMonth } from '@/components/mini-month'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
-import { type Draft, handleFor } from '@/lib/draft'
+import { type Draft, handleFor, placeAddress } from '@/lib/draft'
 import { formatRrule, formatWhen, toDate } from '@/lib/format'
 import { parseGoto } from '@/lib/goto'
 import { type ActiveToken, activeToken } from '@/lib/quickadd'
@@ -40,6 +41,10 @@ interface Props {
   commands: PaletteCommand[]
   /** a person was picked for the `@` token; `line` already has the handle */
   onPerson: (person: Person, line: string) => void
+  /** a place was picked after bei/in/im/at; `line` already has its name */
+  onPlace: (place: Place, line: string) => void
+  /** the highlighted place suggestion, for the map in the panel */
+  onPreviewPlace: (place: Place | undefined) => void
   onDraft: () => void
   onSave: () => void
   onSearchHit: (event: CalendarEvent) => void
@@ -71,6 +76,10 @@ export function CommandPalette(props: Props) {
   const [selected, setSelected] = useState('')
   const [people, setPeople] = useState<Person[]>([])
   const [hits, setHits] = useState<CalendarEvent[]>([])
+  const [localPlaces, setLocalPlaces] = useState<Place[]>([])
+  const [mapPlaces, setMapPlaces] = useState<Place[]>([])
+  // coordinates looked up for places without GEO, by label; undefined: not found
+  const [geocoded, setGeocoded] = useState<Record<string, Geo | undefined>>({})
   // where the caret goes after a completion rewrote the line
   const caret = useRef<number | undefined>(undefined)
 
@@ -104,6 +113,31 @@ export function CommandPalette(props: Props) {
       live = false
     }
   }, [token?.kind, token?.query])
+
+  // places: local sources right away, the map search once typing pauses
+  const placeQuery = token?.kind === 'place' ? token.query : ''
+  useEffect(() => {
+    if (!placeQuery) {
+      setLocalPlaces([])
+      setMapPlaces([])
+      return
+    }
+    let live = true
+    window.api.places(placeQuery).then((p) => live && setLocalPlaces(p))
+    const timer = setTimeout(
+      () => window.api.mapPlaces(placeQuery).then((p) => live && setMapPlaces(p)),
+      300,
+    )
+    return () => {
+      live = false
+      clearTimeout(timer)
+    }
+  }, [placeQuery])
+  const places = useMemo(() => {
+    if (!placeQuery) return []
+    const labels = new Set(localPlaces.map((p) => p.label.toLowerCase()))
+    return [...localPlaces, ...mapPlaces.filter((p) => !labels.has(p.label.toLowerCase()))]
+  }, [placeQuery, localPlaces, mapPlaces])
 
   const searchText =
     mode === 'search' ? query : mode === 'all' && line.trim().length >= 2 ? line : ''
@@ -153,6 +187,8 @@ export function CommandPalette(props: Props) {
   }
   const pickCalendar = (calendar: CalendarInfo) =>
     props.onLine(replaceToken(`#${calendar.id.split('/').pop()}`))
+  const withGeo = (place: Place): Place => ({ ...place, geo: place.geo ?? geocoded[place.label] })
+  const pickPlace = (place: Place) => props.onPlace(withGeo(place), replaceToken(place.name))
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
@@ -172,21 +208,50 @@ export function CommandPalette(props: Props) {
         calendarHits.find((c) => itemValue('calendar', c.id) === current) ?? calendarHits[0]
       if (token.kind === 'person' && person) pickPerson(person)
       if (token.kind === 'calendar' && calendar) pickCalendar(calendar)
+      const place = highlighted ?? places[0]
+      if (token.kind === 'place' && place) pickPlace(place)
     }
   }
 
-  const showCreate = lineModes && line.trim() !== '' && !token && draftEvent
+  // a place token keeps the draft first: Enter still takes the line, Tab or ↓ a place
+  const showCreate =
+    lineModes && line.trim() !== '' && (!token || token.kind === 'place') && draftEvent
+
+  const grouped = placeSources
+    .map(([source, heading]) => [heading, places.filter((p) => p.source === source)] as const)
+    .filter(([, list]) => list.length > 0)
 
   // values in display order; a remembered selection that vanished falls back to the first
   const values = [
     ...(token?.kind === 'person' ? people.map((p) => itemValue('person', p.email ?? p.name)) : []),
     ...(token?.kind === 'calendar' ? calendarHits.map((c) => itemValue('calendar', c.id)) : []),
     ...(showCreate ? ['create'] : []),
+    ...grouped.flatMap(([, list]) => list.map(placeValue)),
     ...(gotoTarget ? ['goto'] : []),
     ...commandHits.map((c) => `command:${c.id}`),
     ...(!token ? hits.slice(0, mode === 'search' ? 50 : 5).map((e) => `event:${e.id}`) : []),
   ]
   const current = values.includes(selected) ? selected : (values[0] ?? '')
+  const highlighted = places.find((p) => placeValue(p) === current)
+
+  // the panel shows the highlighted place; one without GEO is looked up first
+  const previewKey = highlighted ? placeValue(highlighted) : ''
+  const onPreviewPlace = props.onPreviewPlace
+  useEffect(() => {
+    if (!highlighted) return onPreviewPlace(undefined)
+    onPreviewPlace({ ...highlighted, geo: highlighted.geo ?? geocoded[highlighted.label] })
+    if (highlighted.geo || highlighted.label in geocoded) return
+    const label = highlighted.label
+    const timer = setTimeout(
+      () =>
+        window.api
+          .geocode(placeAddress(highlighted))
+          .then((geo) => setGeocoded((known) => ({ ...known, [label]: geo }))),
+      250,
+    )
+    return () => clearTimeout(timer)
+  }, [previewKey, geocoded, onPreviewPlace])
+  useEffect(() => () => onPreviewPlace(undefined), [onPreviewPlace])
 
   return (
     <div
@@ -306,6 +371,27 @@ export function CommandPalette(props: Props) {
             </CommandGroup>
           )}
 
+          {grouped.map(([heading, list]) => (
+            <CommandGroup key={heading} heading={heading}>
+              {list.map((place) => (
+                <CommandItem
+                  key={placeValue(place)}
+                  value={placeValue(place)}
+                  onSelect={() => pickPlace(place)}
+                  className="gap-3"
+                >
+                  <MapPin className="text-muted-foreground" />
+                  <span className="shrink-0">{incognito ? 'Ort' : place.name}</span>
+                  {!incognito && place.label !== place.name && (
+                    <span className="truncate text-xs text-muted-foreground">
+                      {place.label.slice(place.name.length).replace(/^,\s*/, '')}
+                    </span>
+                  )}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          ))}
+
           {mode === 'goto' && (
             <div className="flex items-start gap-5 p-4">
               <MiniMonth selected={gotoTarget ?? new Date()} />
@@ -377,6 +463,17 @@ export function CommandPalette(props: Props) {
 
 function itemValue(kind: string, id: string | undefined) {
   return `${kind}:${id ?? ''}`
+}
+
+const placeSources: [PlaceSource, string][] = [
+  ['contacts', 'Kontakte'],
+  ['events', 'Bisher'],
+  ['config', 'Eigene'],
+  ['map', 'Karte'],
+]
+
+function placeValue(place: Place) {
+  return itemValue('place', `${place.source}:${place.label}`)
 }
 
 function Dot({ color }: { color?: string }) {

@@ -23,11 +23,13 @@ export interface QuickAddOptions {
   now?: Date
   /** minutes, used when neither duration nor end is given */
   defaultDuration?: number
+  /** names of places picked from completion; matched whole, even with small words */
+  places?: string[]
 }
 
-/** The `@`/`#` token the cursor is in, for completion. */
+/** The `@`/`#` token or place the cursor is in, for completion. */
 export interface ActiveToken {
-  kind: 'person' | 'calendar'
+  kind: 'person' | 'calendar' | 'place'
   query: string
   from: number
   to: number
@@ -35,6 +37,8 @@ export interface ActiveToken {
 
 const MINUTE = 60_000
 const DAY = 86_400_000
+/** stands in for a known `bei <host>` until the title is built */
+const HOST = '\u0001'
 
 const weekdayCodes: Record<string, string> = {
   montag: 'MO',
@@ -53,6 +57,11 @@ const weekdayCodes: Record<string, string> = {
   sunday: 'SU',
 }
 const codeOrder = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA']
+const months = new Set(
+  'januar jänner februar märz april mai juni juli august september oktober november dezember january february march may june july october december'.split(
+    ' ',
+  ),
+)
 
 const frequencies: Record<string, string> = {
   täglich: 'DAILY',
@@ -126,18 +135,46 @@ function completeDottedDates(text: string, now: Date): string {
   })
 }
 
-/** Finds the `@`/`#` token that ends at the cursor, for completion. */
+/**
+ * Finds the token that ends at the cursor, for completion: `@person`,
+ * `#calendar`, or up to four words after `bei`/`in`/`im`/`at` that do not read
+ * as a date or time (`in zwei Wochen`, `at 3pm`, `bei Simon morgen`).
+ */
 export function activeToken(text: string, cursor = text.length): ActiveToken | undefined {
   const before = text.slice(0, cursor)
   const match = before.match(new RegExp(`(^|\\s)([@#])([${L}\\p{N}._-]*)$`, 'u'))
-  if (!match) return undefined
-  const query = match[3] ?? ''
-  return {
-    kind: match[2] === '@' ? 'person' : 'calendar',
-    query,
-    from: cursor - query.length - 1,
-    to: cursor,
+  if (match) {
+    const query = match[3] ?? ''
+    return {
+      kind: match[2] === '@' ? 'person' : 'calendar',
+      query,
+      from: cursor - query.length - 1,
+      to: cursor,
+    }
   }
+  const place = before.match(
+    new RegExp(`(?:^|\\s)(in|im|bei|at)\\s+(${L}[^\\s@#]*(?:\\s+[^\\s@#]+){0,3})$`, 'iu'),
+  )
+  const query = place?.[2]
+  if (!query || /\d/.test(query) || readsAsDate(`${place[1]} ${query}`)) return undefined
+  return { kind: 'place', query, from: cursor - query.length, to: cursor }
+}
+
+/** True when chrono finds a date or time anywhere in `text`. */
+function readsAsDate(text: string): boolean {
+  if (
+    text
+      .toLowerCase()
+      .split(/\s+/)
+      .some((w) => w in weekdayCodes || months.has(w))
+  )
+    return true
+  const sample = `${text} `
+  return chrono.de.parse(sample).length > 0 || chrono.en.parse(sample).length > 0
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 export function parseQuickAdd(input: string, options: QuickAddOptions = {}): QuickAdd {
@@ -154,6 +191,26 @@ export function parseQuickAdd(input: string, options: QuickAddOptions = {}): Qui
   const calendarMatch = text.match(new RegExp(`(?<=\\s)#([${L}\\p{N}._-]+)`, 'u'))
   const calendar = calendarMatch?.[1]
   text = text.replace(new RegExp(`(?<=\\s)#[${L}\\p{N}._-]*`, 'gu'), ' ')
+
+  // a place picked from completion, matched whole before dates are looked
+  // for, so "Café am Neuen See" or "Montagsbar" stay intact
+  let location: string | undefined
+  const known = [...(options.places ?? [])].sort((a, b) => b.length - a.length)
+  const knownMatch = known.length
+    ? text.match(
+        new RegExp(`\\s(in|im|bei|at)\\s+(${known.map(escapeRegExp).join('|')})(?=\\s)`, 'iu'),
+      )
+    : null
+  // "bei Simon" names a host and stays in the title, hidden from chrono meanwhile
+  let host: string | undefined
+  if (knownMatch?.[2]) {
+    location = known.find((name) => name.toLowerCase() === knownMatch[2]?.toLowerCase())
+    text = cut(text, knownMatch)
+    if (knownMatch[1]?.toLowerCase() === 'bei') {
+      host = knownMatch[0].trim()
+      text = `${text.slice(0, knownMatch.index)} ${HOST} ${text.slice(knownMatch.index)}`
+    }
+  }
 
   // video keyword
   const videoPattern = /\s(video|call|jitsi|videocall|videokonferenz)(?=\s)/i
@@ -229,7 +286,9 @@ export function parseQuickAdd(input: string, options: QuickAddOptions = {}): Qui
     text = cut(text, durationMatch)
   }
 
-  // date and time: whichever language recognises more of the line
+  // date and time: whichever language recognises more of the line; chrono.de
+  // drops "morgen" after a run of spaces, which the cuts above leave behind
+  text = ` ${text.replace(/\s+/g, ' ').trim()} `
   const de = chrono.de.parse(text, now, { forwardDate: true })
   const en = chrono.en.parse(text, now, { forwardDate: true })
   const covered = (results: chrono.ParsedResult[]) => results.reduce((n, r) => n + r.text.length, 0)
@@ -281,10 +340,9 @@ export function parseQuickAdd(input: string, options: QuickAddOptions = {}): Qui
   // place, after dates are cut so "bei Friedi Sonntag" keeps the Sunday:
   // "in Büro", "im Café Kranzler", "at Office" (capitalized words) only set the
   // location; "bei Friedi" names a host, so it stays in the title as well
-  let location: string | undefined
-  const locationMatch = text.match(
-    /\s(in|im|bei|at)\s+([A-ZÄÖÜ][\p{L}\d.'-]*(?:\s+[A-ZÄÖÜ][\p{L}\d.'-]*)*)(?=\s)/u,
-  )
+  const locationMatch = location
+    ? null
+    : text.match(/\s(in|im|bei|at)\s+([A-ZÄÖÜ][\p{L}\d.'-]*(?:\s+[A-ZÄÖÜ][\p{L}\d.'-]*)*)(?=\s)/u)
   if (locationMatch?.[2] && !(locationMatch[2].toLowerCase() in weekdayCodes)) {
     location = locationMatch[2]
     if (locationMatch[1] !== 'bei') text = cut(text, locationMatch)
@@ -330,6 +388,7 @@ export function parseQuickAdd(input: string, options: QuickAddOptions = {}): Qui
     previous = title
     title = title.replace(filler, '').trim()
   }
+  if (host) title = title.replace(HOST, host).replace(/\s+/g, ' ').trim()
 
   const explicit =
     used.length > 0 || people.length > 0 || calendar !== undefined || rrule !== undefined

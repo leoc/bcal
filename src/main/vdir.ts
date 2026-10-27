@@ -17,10 +17,12 @@ import type {
   CalendarInfo,
   Created,
   DateRange,
+  Geo,
   NewEvent,
   Person,
 } from '../shared/types'
 import { attendees, links, person } from './details'
+import { parseGeo } from './places'
 import { buildIcs, type WriteOptions } from './writer'
 
 // Safety net for open-ended RRULEs that start long before the range.
@@ -191,6 +193,13 @@ export class Vdir {
     })
   }
 
+  /** LOCATION (and GEO) of every event that has one, one entry per event. */
+  locations(): { location: string; geo?: Geo }[] {
+    return this.items.flatMap(({ event }) =>
+      event.location ? [{ location: event.location, geo: geoOf(event.component) }] : [],
+    )
+  }
+
   /** Writes a new event as `<uid>.ics` into its calendar; pimsync uploads it. */
   async create(input: NewEvent, options: WriteOptions = {}): Promise<Created> {
     if (!this.calendarList.some((c) => c.id === input.calendarId)) {
@@ -300,11 +309,18 @@ function toEvent(
     location: item.location || undefined,
     description: item.description || undefined,
     rrule: rrule ? rrule.toString() : undefined,
+    geo: geoOf(component) ?? geoOf(master.component),
     status: typeof status === 'string' ? status : undefined,
     organizer: person(component.getFirstProperty('organizer')),
     attendees: attendees(component),
     links: links(typeof url === 'string' ? url : undefined, item.location, item.description),
   }
+}
+
+function geoOf(component: ICAL.Component): Geo | undefined {
+  const value = component.getFirstPropertyValue('geo')
+  if (!Array.isArray(value)) return undefined
+  return parseGeo(value.join(';'))
 }
 
 /** rename, or copy and remove across file systems (EXDEV) */

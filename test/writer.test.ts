@@ -58,4 +58,23 @@ describe('buildIcs', () => {
     expect(ics).not.toContain('ORGANIZER')
     expect(ics).not.toContain('VALARM')
   })
+
+  it('writes GEO next to the location', () => {
+    const { ics } = buildIcs(
+      {
+        calendarId: 'acc/family',
+        title: 'Kaffee',
+        start: '2026-11-06T15:00:00',
+        end: '2026-11-06T16:00:00',
+        allDay: false,
+        location: 'Café Kranzler, Kurfürstendamm 18, 10719 Berlin',
+        geo: { lat: 52.5036, lon: 13.3297 },
+        attendees: [],
+      },
+      { uid: 'u-3', now },
+    )
+    expect(ics).toContain('GEO:52.5036;13.3297')
+    const vevent = new ICAL.Component(ICAL.parse(ics)).getFirstSubcomponent('vevent')
+    expect(vevent?.getFirstPropertyValue('geo')).toEqual([52.5036, 13.3297])
+  })
 })

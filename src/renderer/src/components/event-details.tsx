@@ -1,6 +1,7 @@
-import type { Attendee, CalendarEvent, CalendarInfo } from '@shared/types'
+import type { Attendee, CalendarEvent, CalendarInfo, Place } from '@shared/types'
 import { Check, CircleHelp, Clock, ExternalLink, MapPin, Repeat, Users, X } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { osmLink, PlaceMap } from '@/components/place-map'
 import { formatRrule, formatWhen } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -9,12 +10,14 @@ interface Props {
   calendar?: CalendarInfo
   /** an unsaved draft from the palette */
   draft?: boolean
+  /** the place highlighted in the palette, shown instead of the event's own */
+  place?: Place
   /** show only calendar and time */
   incognito: boolean
   onOpenLink: (url: string) => void
 }
 
-export function EventDetails({ event, calendar, draft, incognito, onOpenLink }: Props) {
+export function EventDetails({ event, calendar, draft, place, incognito, onOpenLink }: Props) {
   // incognito: keep calendar and time, drop everything that may carry names
   const shown =
     event && incognito
@@ -22,12 +25,17 @@ export function EventDetails({ event, calendar, draft, incognito, onOpenLink }: 
           ...event,
           title: 'Termin',
           location: undefined,
+          geo: undefined,
           description: undefined,
           organizer: undefined,
           attendees: [],
           links: [],
         }
       : event
+  const shownPlace = incognito ? undefined : place
+  const shownLocation =
+    shown?.location && !/^https?:\/\//.test(shown.location) ? shown.location : undefined
+  const geo = shownPlace ? shownPlace.geo : shown?.geo
   return (
     <aside className="flex w-80 shrink-0 flex-col border-l bg-sidebar text-sm">
       <div className="drag h-[72px] shrink-0" />
@@ -56,8 +64,31 @@ export function EventDetails({ event, calendar, draft, incognito, onOpenLink }: 
               <span className="first-letter:uppercase">{formatRrule(shown.rrule)}</span>
             </Row>
           )}
-          {shown.location && !/^https?:\/\//.test(shown.location) && (
-            <Row icon={<MapPin />}>{shown.location}</Row>
+          {(shownPlace?.label ?? shownLocation) && (
+            <Row icon={<MapPin />}>
+              <div className="space-y-2">
+                <div>
+                  {shownPlace?.label ?? shownLocation}
+                  {shownPlace && (
+                    <span className="ml-2 rounded border border-dashed px-1.5 text-[11px] text-muted-foreground">
+                      Vorschlag
+                    </span>
+                  )}
+                </div>
+                {geo && (
+                  <>
+                    <PlaceMap geo={geo} />
+                    <button
+                      type="button"
+                      onClick={() => onOpenLink(osmLink(geo))}
+                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <ExternalLink className="size-3" /> in Karte öffnen
+                    </button>
+                  </>
+                )}
+              </div>
+            </Row>
           )}
 
           {shown.links.length > 0 && (

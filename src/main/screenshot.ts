@@ -42,7 +42,8 @@ export function captureAndQuit(window: BrowserWindow, path: string, quit: () => 
     for (const key of (process.env.BCAL_SCREENSHOT_KEYS ?? '').split(/\s+/).filter(Boolean)) {
       await press(window, key)
     }
-    await sleep(500)
+    // BCAL_SCREENSHOT_AFTER: wait longer for network results (map search, tiles)
+    await sleep(Number(process.env.BCAL_SCREENSHOT_AFTER ?? 500))
     const image = await window.webContents.capturePage()
     await writeFile(path, image.toPNG())
     quit()

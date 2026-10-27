@@ -5,6 +5,7 @@ import {
   matchesCalendar,
   type NewEvent,
   type Person,
+  type Place,
 } from '@shared/types'
 import { parseQuickAdd, type QuickAdd } from './quickadd'
 
@@ -17,6 +18,8 @@ export interface Draft {
   people: { token: string; person?: Person }[]
   /** meeting link when the line asks for video */
   video?: string
+  /** the place picked for the location, with its full label and GEO */
+  place?: Place
 }
 
 export const DRAFT_ID = 'bcal-draft'
@@ -44,6 +47,8 @@ export function buildDraft(
     config: Config
     /** people chosen from completion, by handle (lower case) */
     chosen: Record<string, Person>
+    /** places chosen from completion, by name (lower case) */
+    places?: Record<string, Place>
     videoCode: string
     now?: Date
   },
@@ -51,6 +56,7 @@ export function buildDraft(
   const quick = parseQuickAdd(line, {
     now: context.now,
     defaultDuration: context.config.defaultDuration,
+    places: Object.values(context.places ?? {}).map((p) => p.name),
   })
   return {
     line,
@@ -58,7 +64,14 @@ export function buildDraft(
     calendar: pickCalendar(quick.calendar, context.calendars, context.config),
     people: quick.people.map((token) => ({ token, person: context.chosen[token.toLowerCase()] })),
     video: quick.video ? `https://meet.example.org/${context.videoCode}` : undefined,
+    place: quick.location ? context.places?.[quick.location.toLowerCase()] : undefined,
   }
+}
+
+/** What to geocode: a contact's address without the name in front, else the label. */
+export function placeAddress(place: Place): string {
+  if (place.source !== 'contacts') return place.label
+  return place.label.slice(place.name.length).replace(/^,\s*/, '') || place.label
 }
 
 function pad(n: number): string {
@@ -88,7 +101,8 @@ export function toNewEvent(draft: Draft, config: Config): NewEvent | undefined {
     start: localStamp(quick.start, quick.allDay),
     end: localStamp(quick.end, quick.allDay),
     allDay: quick.allDay,
-    location: quick.location ?? draft.video,
+    location: draft.place?.label ?? quick.location ?? draft.video,
+    geo: draft.place?.geo,
     description,
     rrule: quick.rrule,
     attendees: draft.people.flatMap((p) => (p.person ? [p.person] : [{ name: p.token }])),
@@ -110,6 +124,7 @@ export function draftAsEvent(draft: Draft, config: Config): CalendarEvent | unde
     location: event.location,
     description: event.description,
     rrule: event.rrule,
+    geo: event.geo,
     organizer: event.attendees.some((a) => a.email) ? config.organizer : undefined,
     attendees: event.attendees,
     links: draft.video ? [draft.video] : [],

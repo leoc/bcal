@@ -34,13 +34,15 @@ async function vcfFiles(dir: string): Promise<string[]> {
     .map((e) => join(e.parentPath, e.name))
 }
 
-/** People from the address books under `dir` (pimsync's contacts vdir). */
-export async function readContacts(dir: string): Promise<Person[]> {
+/** Texts of all vCard files under `dir` (pimsync's contacts vdir). */
+export async function readVcards(dir: string): Promise<string[]> {
   const files = await vcfFiles(dir)
-  const people = await Promise.all(
-    files.map((f) => readFile(f, 'utf8').then(parseVcards, () => [] as Person[])),
-  )
-  return people.flat()
+  return Promise.all(files.map((f) => readFile(f, 'utf8').catch(() => '')))
+}
+
+/** People from the address books under `dir`. */
+export async function readContacts(dir: string): Promise<Person[]> {
+  return (await readVcards(dir)).flatMap(parseVcards)
 }
 
 /** Merges contacts and event participants into ranked candidates per address/name. */

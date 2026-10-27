@@ -37,6 +37,32 @@ keymap: { n: next, h: none }
       defaultDuration: 60,
       defaultAlarm: undefined,
       organizer: undefined,
+      places: [],
+      near: { lat: 52.52, lon: 13.405 },
     })
+  })
+
+  it('reads own places and the map center', () => {
+    const config = normalize(
+      parse(`
+places:
+  - name: Büro
+    address: Musterstraße 1, 10115 Berlin
+    geo: [52.53, 13.38]
+  - name: Kita
+  - address: ohne Namen
+near: { lat: 48.14, lon: 11.58 }
+`),
+    )
+    expect(config.places).toEqual([
+      {
+        name: 'Büro',
+        label: 'Büro, Musterstraße 1, 10115 Berlin',
+        geo: { lat: 52.53, lon: 13.38 },
+        source: 'config',
+      },
+      { name: 'Kita', label: 'Kita', geo: undefined, source: 'config' },
+    ])
+    expect(config.near).toEqual({ lat: 48.14, lon: 11.58 })
   })
 })

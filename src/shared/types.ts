@@ -29,6 +29,8 @@ export interface CalendarEvent {
   description?: string
   /** RRULE of the series, e.g. `FREQ=WEEKLY;BYDAY=MO` */
   rrule?: string
+  /** GEO of the event, for the map */
+  geo?: Geo
   status?: string
   organizer?: Attendee
   attendees: Attendee[]
@@ -66,6 +68,10 @@ export interface Config {
   defaultAlarm?: number
   /** who invites when a new event has attendees */
   organizer?: Person
+  /** own places offered after `bei`/`in`/`im`/`at` */
+  places: Place[]
+  /** map searches prefer places near this point (default: Berlin) */
+  near: Geo
 }
 
 export function matchesCalendar(calendar: CalendarInfo, ref: string): boolean {
@@ -89,6 +95,8 @@ export interface NewEvent {
   location?: string
   description?: string
   rrule?: string
+  /** coordinates of the location, written as GEO */
+  geo?: Geo
   attendees: Person[]
   /** minutes before start; no alarm when undefined */
   alarm?: number
@@ -98,4 +106,21 @@ export interface Created {
   /** id of the first occurrence, as `events()` reports it */
   id: string
   path: string
+}
+
+export interface Geo {
+  lat: number
+  lon: number
+}
+
+export type PlaceSource = 'contacts' | 'events' | 'config' | 'map'
+
+/** A place for `bei Simon` or `im Café Kranzler`: contacts, past events, config.yml or the map. */
+export interface Place {
+  /** short name that goes into the line, e.g. `Café Kranzler` */
+  name: string
+  /** what LOCATION gets: `Name, Straße Nr, PLZ Ort` */
+  label: string
+  geo?: Geo
+  source: PlaceSource
 }

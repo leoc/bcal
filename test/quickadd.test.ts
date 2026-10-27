@@ -141,3 +141,61 @@ describe('places', () => {
     })
   })
 })
+
+describe('place token', () => {
+  it('completes words after bei/in/im/at', () => {
+    expect(activeToken('Kaffee bei Kranz')).toEqual({
+      kind: 'place',
+      query: 'Kranz',
+      from: 11,
+      to: 16,
+    })
+    expect(activeToken('morgen 15 Uhr Kaffee im Café am Neuen')).toMatchObject({
+      kind: 'place',
+      query: 'Café am Neuen',
+    })
+    expect(activeToken('Workshop at office')).toMatchObject({ kind: 'place', query: 'office' })
+    expect(activeToken('Kaffee bei Kranz', 13)).toMatchObject({ query: 'Kr', to: 13 })
+  })
+
+  it('stays away from dates, times and finished words', () => {
+    expect(activeToken('Kaffee in zwei Wochen')).toBeUndefined()
+    expect(activeToken('Kaffee im Juni')).toBeUndefined()
+    expect(activeToken('call at 3pm')).toBeUndefined()
+    expect(activeToken('Essen bei Simon morgen')).toBeUndefined()
+    expect(activeToken('Essen bei Simon Sonntag')).toBeUndefined()
+    expect(activeToken('Kaffee bei ')).toBeUndefined()
+    expect(activeToken('Kaffee bei Simon ')).toBeUndefined()
+    expect(activeToken('Kaffee bei Simon @Ri')).toMatchObject({ kind: 'person' })
+  })
+})
+
+describe('picked places', () => {
+  const places = ['Café am Neuen See', 'Simon Müller', 'Montagsbar']
+  const withPlaces = (line: string) => parseQuickAdd(line, { now, places })
+
+  it('takes a picked name whole, even with small words', () => {
+    expect(withPlaces('Kaffee im Café am Neuen See morgen 15 Uhr')).toMatchObject({
+      title: 'Kaffee',
+      location: 'Café am Neuen See',
+      start: at(2026, 10, 27, 15),
+    })
+  })
+
+  it('keeps a picked host in the title and hides it from the date parser', () => {
+    expect(withPlaces('Essen bei Simon Müller Sonntag 14 Uhr')).toMatchObject({
+      title: 'Essen bei Simon Müller',
+      location: 'Simon Müller',
+      start: at(2026, 11, 1, 14),
+    })
+    expect(withPlaces('Bier in Montagsbar Freitag 20 Uhr')).toMatchObject({
+      title: 'Bier',
+      location: 'Montagsbar',
+      start: at(2026, 10, 30, 20),
+    })
+  })
+
+  it('falls back to free text for names that were not picked', () => {
+    expect(withPlaces('Kaffee im Café Kranzler morgen 15 Uhr').location).toBe('Café Kranzler')
+  })
+})

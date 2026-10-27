@@ -6,6 +6,7 @@ import type {
   Config,
   DateRange,
   Person,
+  Place,
   ViewName,
 } from '@shared/types'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -16,7 +17,14 @@ import { EventDetails } from '@/components/event-details'
 import { KeymapHelp } from '@/components/keymap-help'
 import { arrange, isVisible, pressGroup, showAll, type Visibility } from '@/lib/calendars'
 import { contrastFor } from '@/lib/color'
-import { buildDraft, DRAFT_ID, draftAsEvent, handleFor, toNewEvent } from '@/lib/draft'
+import {
+  buildDraft,
+  DRAFT_ID,
+  draftAsEvent,
+  handleFor,
+  placeAddress,
+  toNewEvent,
+} from '@/lib/draft'
 import { toDate } from '@/lib/format'
 import { type Action, buildBindings, resolve } from '@/lib/keymap'
 
@@ -69,6 +77,9 @@ function Calendar({
   const [palette, setPalette] = useState<PaletteMode>()
   const [line, setLine] = useState('')
   const [chosen, setChosen] = useState<Record<string, Person>>({})
+  const [chosenPlaces, setChosenPlaces] = useState<Record<string, Place>>({})
+  // the place highlighted in the palette, previewed on the panel's map
+  const [previewPlace, setPreviewPlace] = useState<Place>()
   const [videoCode, setVideoCode] = useState(newVideoCode)
   // the draft stays after Enter until saved or discarded
   const [draftActive, setDraftActive] = useState(false)
@@ -104,9 +115,9 @@ function Calendar({
   const draft = useMemo(
     () =>
       line.trim() && calendars.length
-        ? buildDraft(line, { calendars, config, chosen, videoCode })
+        ? buildDraft(line, { calendars, config, chosen, places: chosenPlaces, videoCode })
         : undefined,
-    [line, calendars, config, chosen, videoCode],
+    [line, calendars, config, chosen, chosenPlaces, videoCode],
   )
   // in the mixed palette only lines that read like an event become a draft
   const lineOpen = palette === 'create' || (palette === 'all' && Boolean(draft?.quick.explicit))
@@ -173,6 +184,7 @@ function Calendar({
   const discardDraft = useCallback(() => {
     setLine('')
     setChosen({})
+    setChosenPlaces({})
     setDraftActive(false)
     setVideoCode(newVideoCode())
   }, [])
@@ -409,6 +421,7 @@ function Calendar({
           event={panelEvent}
           calendar={panelEvent && byId.get(panelEvent.calendarId)}
           draft={Boolean(draftEvent)}
+          place={palette ? previewPlace : undefined}
           incognito={incognito}
           onOpenLink={(url) => window.api.openLink(url)}
         />
@@ -429,6 +442,17 @@ function Calendar({
             setChosen((c) => ({ ...c, [handleFor(person).toLowerCase()]: person }))
             setLine(next)
           }}
+          onPlace={(place, next) => {
+            const key = place.name.toLowerCase()
+            setChosenPlaces((c) => ({ ...c, [key]: place }))
+            setLine(next)
+            // picked before the lookup for the map finished: fill GEO in later
+            if (!place.geo)
+              window.api.geocode(placeAddress(place)).then((geo) => {
+                if (geo) setChosenPlaces((c) => (c[key] ? { ...c, [key]: { ...c[key], geo } } : c))
+              })
+          }}
+          onPreviewPlace={setPreviewPlace}
           onDraft={() => {
             setDraftActive(true)
             setPalette(undefined)

@@ -80,6 +80,7 @@ export function buildIcs(
   }
   if (input.rrule) event.addProperty(new ICAL.Property(ICAL.parse.property(`RRULE:${input.rrule}`)))
   if (input.location) event.addPropertyWithValue('location', input.location)
+  if (input.geo) event.addPropertyWithValue('geo', [input.geo.lat, input.geo.lon])
   if (input.description) event.addPropertyWithValue('description', input.description)
 
   const invited = input.attendees.filter((a) => a.email)

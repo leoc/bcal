@@ -68,6 +68,15 @@ participants; people with an address get invited by the server) and
 `video`/`call` for a meet.example.org room. Without time it is all-day, without
 date today. Defaults live in `config.yml`.
 
+After `bei`, `in`, `im` or `at` the palette suggests places: contacts with an
+address, locations of past events, own `places:` from `config.yml` and the OSM
+map search ([Photon](https://photon.komoot.io), biased towards `near:`). Enter
+still keeps the line; `↓` or Tab picks a place, the panel shows it on a map
+(MapLibre with [OpenFreeMap](https://openfreemap.org) tiles). A picked place is
+saved as `LOCATION` "Name, street, postcode city" plus `GEO`; saved events with
+`GEO` show the map too. Without a pick the words stay free text. Map searches
+send the typed place words to photon.komoot.io.
+
 While typing, the draft shows dashed in the calendar and in the panel; Enter
 keeps it as a draft, `Shift+Enter` saves it as `<uid>.ics` and pimsync uploads
 it. `u` moves the event just created to `~/_nobackup/_deletable/bcal/`.
@@ -77,7 +86,9 @@ it. `u` moves the event just created to `~/_nobackup/_deletable/bcal/`.
 `~/.config/bcal/config.yml` (or `BCAL_CONFIG`) is written with commented
 defaults on first start and reloaded on save: start view, sidebar groups (their
 order assigns the keys 1–9; `toggle: true` makes a group an add-on that its
-key switches on and off), calendars hidden by default, and key overrides
+key switches on and off), calendars hidden by default, own places
+(`places:` with `name`, optional `address` and `geo: [lat, lon]`), the point map
+searches prefer (`near:`, default Berlin), and key overrides
 (`<key>: <action>`, `none` unbinds). Toggles in the app win over `hidden` and
 are kept per machine. Chromium state lives in `~/.local/state/bcal`.
 

@@ -3,7 +3,8 @@ import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
 import type { Config, DateRange, NewEvent } from '../shared/types'
 import { loadConfig, watchConfig } from './config'
-import { type Candidate, mergePeople, rankPeople, readContacts } from './people'
+import { type Candidate, mergePeople, parseVcards, rankPeople, readVcards } from './people'
+import { eventPlaces, Photon, type PlaceCandidate, parseVcardPlaces, rankPlaces } from './places'
 import { captureAndQuit, screenshotPath, screenshotSize } from './screenshot'
 import { State } from './state'
 import { Vdir } from './vdir'
@@ -13,11 +14,25 @@ const vdir = new Vdir(root)
 let window: BrowserWindow | null = null
 const contactsDir = process.env.BCAL_CONTACTS ?? join(homedir(), '.contacts')
 let people: Promise<Candidate[]> | undefined
-// rebuilt lazily after the vdir changed
-const loadPeople = async () =>
-  mergePeople(await readContacts(contactsDir), vdir.participants()).filter(
+let places: Promise<PlaceCandidate[]> | undefined
+let vcards: Promise<string[]> | undefined
+const photon = new Photon(() => config.near)
+// rebuilt lazily after the vdir or the config changed
+const loadPeople = async () => {
+  vcards ??= readVcards(contactsDir)
+  const contacts = (await vcards).flatMap(parseVcards)
+  return mergePeople(contacts, vdir.participants()).filter(
     (p) => p.email !== config.organizer?.email,
   )
+}
+const loadPlaces = async () => {
+  vcards ??= readVcards(contactsDir)
+  return [
+    ...(await vcards).flatMap(parseVcardPlaces),
+    ...eventPlaces(vdir.locations()),
+    ...config.places.map((p) => ({ ...p, count: 1 })),
+  ]
+}
 let config: Config
 
 // Keep Chromium's caches out of ~/.config/bcal, which holds only config.yml.
@@ -78,6 +93,12 @@ app.whenReady().then(async () => {
     people ??= loadPeople()
     return rankPeople(await people, query).map(({ name, email }) => ({ name, email }))
   })
+  ipcMain.handle('places:search', async (_event, query: string) => {
+    places ??= loadPlaces()
+    return rankPlaces(await places, query)
+  })
+  ipcMain.handle('places:map', (_event, query: string) => photon.search(query))
+  ipcMain.handle('places:geocode', (_event, address: string) => photon.geocode(address))
   ipcMain.handle('vdir:undo', async (_event, path: string) => {
     await vdir.undo(path)
     window?.webContents.send('vdir:changed')
@@ -92,10 +113,12 @@ app.whenReady().then(async () => {
   if (!screenshotPath) {
     vdir.watch(() => {
       people = undefined
+      places = undefined
       window?.webContents.send('vdir:changed')
     })
     watchConfig(async () => {
       config = await loadConfig()
+      places = undefined
       window?.webContents.send('config:changed')
     })
   }

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { buildDraft, draftAsEvent, handleFor, toNewEvent } from '../src/renderer/src/lib/draft'
-import type { CalendarInfo, Config } from '../src/shared/types'
+import {
+  buildDraft,
+  draftAsEvent,
+  handleFor,
+  placeAddress,
+  toNewEvent,
+} from '../src/renderer/src/lib/draft'
+import type { CalendarInfo, Config, Place } from '../src/shared/types'
 
 const cal = (id: string, name: string): CalendarInfo => ({
   id,
@@ -18,6 +24,8 @@ const config: Config = {
   defaultDuration: 60,
   defaultAlarm: 15,
   organizer: { name: 'Arthur', email: 'arthur@example.org' },
+  places: [],
+  near: { lat: 52.52, lon: 13.405 },
 }
 const now = new Date(2026, 9, 26, 12)
 const simon = { name: 'Simon Müller', email: 'simon@example.org' }
@@ -60,5 +68,52 @@ describe('draft', () => {
       end: '2026-12-04',
       allDay: true,
     })
+  })
+})
+
+describe('places in drafts', () => {
+  const kranzler: Place = {
+    name: 'Café am Neuen See',
+    label: 'Café am Neuen See, Lichtensteinallee 2, 10787 Berlin',
+    geo: { lat: 52.5102, lon: 13.3494 },
+    source: 'map',
+  }
+  const withPlace = (line: string) =>
+    buildDraft(line, {
+      calendars,
+      config,
+      chosen: {},
+      places: { 'café am neuen see': kranzler },
+      videoCode: 'abc123',
+      now,
+    })
+
+  it('writes the full label and GEO of a picked place', () => {
+    const d = withPlace('morgen 15 Uhr Kaffee im Café am Neuen See video')
+    expect(toNewEvent(d, config)).toMatchObject({
+      title: 'Kaffee',
+      location: kranzler.label,
+      geo: kranzler.geo,
+      description: 'Video: https://meet.example.org/abc123',
+    })
+    expect(draftAsEvent(d, config)?.geo).toEqual(kranzler.geo)
+  })
+
+  it('keeps free text when the place was not picked', () => {
+    expect(toNewEvent(withPlace('morgen Kaffee im Café Kranzler'), config)).toMatchObject({
+      location: 'Café Kranzler',
+      geo: undefined,
+    })
+  })
+
+  it('geocodes contacts by their address only', () => {
+    expect(
+      placeAddress({
+        name: 'Simon Müller',
+        label: 'Simon Müller, Alberichstr. 98, 12623 Berlin',
+        source: 'contacts',
+      }),
+    ).toBe('Alberichstr. 98, 12623 Berlin')
+    expect(placeAddress(kranzler)).toBe(kranzler.label)
   })
 })

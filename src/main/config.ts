@@ -3,7 +3,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { parse } from 'yaml'
-import type { Config, Person, ViewName } from '../shared/types'
+import type { Config, Geo, Person, Place, ViewName } from '../shared/types'
+import { parseGeo } from './places'
 
 export const configPath =
   process.env.BCAL_CONFIG ?? join(homedir(), '.config', 'bcal', 'config.yml')
@@ -16,6 +17,8 @@ export const defaultConfig: Config = {
   hidden: [],
   keymap: {},
   defaultDuration: 60,
+  places: [],
+  near: { lat: 52.52, lon: 13.405 },
 }
 
 // Written on first start so the options are discoverable.
@@ -49,6 +52,15 @@ defaultDuration: 60
 defaultAlarm: 15
 # Invites go out from this address when a line names people (@Simon).
 organizer: { name: Arthur Andersen, email: arthur@example.org }
+
+# Places offered after "bei", "in", "im", "at" (besides contacts with an
+# address, past event locations and the OSM map search). geo is optional.
+places: []
+#  - name: Büro
+#    address: Musterstraße 1, 10115 Berlin
+#    geo: [52.53, 13.38]
+# Map searches prefer places near this point.
+near: [52.52, 13.405]
 
 # Key overrides: <key>: <action>. Actions: prev, next, today, view:week,
 # view:month, view:day, view:list, focus:next, focus:prev, details, open-link,
@@ -96,7 +108,34 @@ export function normalize(raw: unknown): Config {
     defaultDuration: positive(data.defaultDuration) ?? defaultConfig.defaultDuration,
     defaultAlarm: data.defaultAlarm === 0 ? 0 : positive(data.defaultAlarm),
     organizer: organizer(data.organizer),
+    places: Array.isArray(data.places) ? data.places.flatMap(place) : [],
+    near: geo(data.near) ?? defaultConfig.near,
   }
+}
+
+/** `[52.5, 13.4]`, `{ lat, lon }` or `"52.5, 13.4"` */
+function geo(value: unknown): Geo | undefined {
+  if (Array.isArray(value)) return parseGeo(value.join(','))
+  if (value && typeof value === 'object') {
+    const { lat, lon } = value as Record<string, unknown>
+    return parseGeo(`${lat},${lon}`)
+  }
+  return typeof value === 'string' ? parseGeo(value) : undefined
+}
+
+function place(value: unknown): Place[] {
+  if (!value || typeof value !== 'object') return []
+  const { name, address } = value as Record<string, unknown>
+  if (typeof name !== 'string' || !name.trim()) return []
+  const rest = typeof address === 'string' && address.trim() ? address.trim() : undefined
+  return [
+    {
+      name: name.trim(),
+      label: rest ? `${name.trim()}, ${rest}` : name.trim(),
+      geo: geo((value as Record<string, unknown>).geo),
+      source: 'config',
+    },
+  ]
 }
 
 /** Watches the directory, since editors replace the file on save. */

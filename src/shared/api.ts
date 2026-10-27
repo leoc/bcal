@@ -4,8 +4,10 @@ import type {
   Config,
   Created,
   DateRange,
+  Geo,
   NewEvent,
   Person,
+  Place,
 } from './types'
 
 export interface Api {
@@ -17,6 +19,12 @@ export interface Api {
   create: (event: NewEvent) => Promise<Created>
   /** people for @ completion: contacts and past participants, best first */
   people: (query: string) => Promise<Person[]>
+  /** local places for `bei`/`in`/`im`/`at`: contacts, past events, config.yml */
+  places: (query: string) => Promise<Place[]>
+  /** places from the OSM map search (Photon); empty when offline */
+  mapPlaces: (query: string) => Promise<Place[]>
+  /** coordinates for an address, e.g. a contact without GEO */
+  geocode: (address: string) => Promise<Geo | undefined>
   /** takes back an event created in this session (moves it to the trash) */
   undo: (path: string) => Promise<void>
   /** fires when files in the vdir changed (pimsync wrote something) */

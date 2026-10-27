@@ -19,6 +19,8 @@ const config: Config = {
   hidden: ['birthdays'],
   keymap: {},
   defaultDuration: 60,
+  places: [],
+  near: { lat: 52.52, lon: 13.405 },
 }
 const groups = arrange(calendars, config)
 const shown = (v: Record<string, boolean>) =>

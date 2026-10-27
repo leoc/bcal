@@ -70,3 +70,14 @@ describe('search', () => {
     expect(vdir.search('   ', 50, now)).toHaveLength(0)
   })
 })
+
+describe('places', () => {
+  it('reports GEO with the event and LOCATIONs for completion', () => {
+    const [birthday] = vdir.events(week).filter((e) => e.calendarId === 'acc/family')
+    expect(birthday?.geo).toEqual({ lat: 52.5036, lon: 13.3297 })
+    expect(vdir.locations()).toContainEqual({
+      location: 'Café Kranzler, Kurfürstendamm 18, 10719 Berlin',
+      geo: { lat: 52.5036, lon: 13.3297 },
+    })
+  })
+})
