@@ -2,20 +2,28 @@
 # Show or hide bcal on the Hyprland special workspace "bcal", starting it
 # there if it is not running. Bound to LEADER o c (hypr/lua/leader.lua; the
 # window rule bcal-special in rules.lua sends the window to the workspace).
-# Uses the last build in out/; run `npm run build` after changes.
+# The package installs this as bcal-toggle with BCAL_BIN set; from the repo it
+# starts bcal from PATH or else the last build in out/ (`npm run build`).
 set -euo pipefail
-cd "$(dirname "$0")/.."
 
-if hyprctl clients -j | jq -e '.[] | select(.title == "bcal")' >/dev/null; then
+shown() { hyprctl clients -j | jq -e '.[] | select(.title == "bcal")' >/dev/null; }
+
+if shown; then
   hyprctl dispatch 'hl.dsp.workspace.toggle_special("bcal")' >/dev/null
   exit
 fi
 
-[ -f out/main/index.js ] || nix develop -c npx electron-vite build >/dev/null
-setsid nix develop -c electron . >/dev/null 2>&1 &
+bin=${BCAL_BIN:-$(command -v bcal || true)}
+if [ -n "$bin" ]; then
+  setsid "$bin" >/dev/null 2>&1 &
+else
+  cd "$(dirname "$0")/.."
+  [ -f out/main/index.js ] || nix develop -c npx electron-vite build >/dev/null
+  setsid nix develop -c electron . >/dev/null 2>&1 &
+fi
 for _ in $(seq 1 60); do
   sleep 0.5
-  if hyprctl clients -j | jq -e '.[] | select(.title == "bcal")' >/dev/null; then
+  if shown; then
     hyprctl dispatch 'hl.dsp.workspace.toggle_special("bcal")' >/dev/null
     exit
   fi

@@ -6,7 +6,7 @@ itself: it reads the local vdir that [pimsync](https://pimsync.whynothugo.nl/)
 keeps in sync with the Nextcloud, and will write new events back as `.ics`
 files for pimsync to upload.
 
-Planning, decisions and open questions: `../../project.org` (outside the repo).
+MIT licensed.
 
 ## How it works
 
@@ -120,6 +120,21 @@ are kept per machine. Chromium state lives in `~/.local/state/bcal`.
 Configured in `~/.nixos-config/home/arthur/shared/programs/calendar.nix`
 (`programs.pimsync`, `services.pimsync`, `accounts.calendar.accounts.*.pimsync`).
 The vdir root defaults to `~/.calendar`; override with `BCAL_VDIR`.
+
+## Install
+
+The flake builds a package with Electron from nixpkgs: `nix run
+github:leoc/bcal`, or in a flake-based Home Manager config:
+
+```nix
+inputs.bcal.url = "github:leoc/bcal";
+# …
+home.packages = [ inputs.bcal.packages.${pkgs.stdenv.hostPlatform.system}.default ];
+```
+
+It installs `bcal`, a desktop entry and `bcal-toggle`, which shows or hides
+bcal on the Hyprland special workspace `bcal` and starts it there if needed
+(pair it with a window rule that sends the title `bcal` to `special:bcal`).
 
 ## Development
 

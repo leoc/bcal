@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Keyboard-driven desktop calendar on top of a local vdir (CalDAV via pimsync)",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",

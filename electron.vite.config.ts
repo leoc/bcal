@@ -5,8 +5,8 @@ import { defineConfig } from 'electron-vite'
 
 export default defineConfig({
   main: {
-    // ical.js ships ESM first; bundle it instead of requiring it at runtime
-    build: { externalizeDeps: { exclude: ['ical.js'] } },
+    // bundle every dependency, so the package needs no node_modules at runtime
+    build: { externalizeDeps: false },
   },
   preload: {},
   renderer: {
