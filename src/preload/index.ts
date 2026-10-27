@@ -28,6 +28,15 @@ const api: Api = {
   onChange: (listener) => subscribe('vdir:changed', listener),
   onConfigChange: (listener) => subscribe('config:changed', listener),
   openLink: (url) => ipcRenderer.invoke('shell:open', url),
+  hide: () => ipcRenderer.send('app:hide'),
+  quit: () => ipcRenderer.send('app:quit'),
+  onCommand: (listener) => {
+    const handler = (_event: unknown, action: string) => listener(action)
+    ipcRenderer.on('app:command', handler)
+    return () => {
+      ipcRenderer.off('app:command', handler)
+    }
+  },
   visibility: () => ipcRenderer.invoke('state:visibility'),
   setVisibility: (visibility) => ipcRenderer.invoke('state:setVisibility', visibility),
 }

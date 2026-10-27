@@ -537,6 +537,8 @@ function Calendar({
         else if (draftActive) discardDraft()
         else setFocusedId(undefined)
       } else if (action === 'incognito') setIncognito((i) => !i)
+      else if (action === 'hide') window.api.hide()
+      else if (action === 'quit') window.api.quit()
       else if (action === 'groups:all') updateVisibility(() => showAll(groups))
       else if (action.startsWith('group:')) {
         const index = Number(action.split(':')[1])
@@ -572,6 +574,9 @@ function Calendar({
     return () => window.removeEventListener('keydown', onKey)
   }, [bindings, run])
 
+  // the tray's "Neuer Termin"
+  useEffect(() => window.api.onCommand((action) => run(action as Action)), [run])
+
   const commands = useMemo(() => {
     const keyFor = (action: Action) => bindings.find((b) => b.action === action)?.key
     const entries: [Action, string][] = [
@@ -596,6 +601,8 @@ function Calendar({
         : []),
       ...(canUndo ? ([['undo', 'Letzte Änderung zurücknehmen']] as [Action, string][]) : []),
       ['help', 'Tastenkürzel'],
+      ['hide', 'Fenster verstecken'],
+      ['quit', 'bcal beenden'],
     ]
     return entries.map(([action, label]) => ({
       id: action,

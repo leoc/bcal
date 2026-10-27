@@ -49,6 +49,12 @@ export interface Api {
   /** calendar toggles from the UI, kept per machine */
   visibility: () => Promise<Record<string, boolean>>
   setVisibility: (visibility: Record<string, boolean>) => Promise<void>
+  /** hides the window; bcal keeps running (tray, `bcal`, LEADER o c bring it back) */
+  hide: () => void
+  /** quits bcal for good */
+  quit: () => void
+  /** commands from outside the page, e.g. the tray's "new" */
+  onCommand: (listener: (action: string) => void) => () => void
   /** opens an http(s) link in the default browser */
   openLink: (url: string) => Promise<void>
 }

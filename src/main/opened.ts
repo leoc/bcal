@@ -1,4 +1,3 @@
-import { execFile } from 'node:child_process'
 import { statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { basename, resolve } from 'node:path'
@@ -28,22 +27,4 @@ function isFile(path: string): boolean {
 /** Reads the file at once: mail clients remove their temp files soon. */
 export async function readOpened(path: string): Promise<{ name: string; text: string }> {
   return { name: basename(path), text: await readFile(path, 'utf8') }
-}
-
-/**
- * Shows bcal's Hyprland special workspace (where its window rule puts it),
- * if it is not on screen already. Elsewhere this does nothing.
- */
-export function revealOnHyprland(): void {
-  if (!process.env.HYPRLAND_INSTANCE_SIGNATURE) return
-  execFile('hyprctl', ['monitors', '-j'], (error, stdout) => {
-    if (error) return
-    try {
-      const monitors = JSON.parse(stdout) as { specialWorkspace?: { name?: string } }[]
-      if (monitors.some((m) => m.specialWorkspace?.name === 'special:bcal')) return
-    } catch {
-      return
-    }
-    execFile('hyprctl', ['dispatch', 'hl.dsp.workspace.toggle_special("bcal")'], () => {})
-  })
 }

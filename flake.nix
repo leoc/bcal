@@ -37,14 +37,10 @@
           installPhase = ''
             runHook preInstall
             mkdir -p $out/share/bcal
-            cp -r out package.json $out/share/bcal/
+            cp -r out resources package.json $out/share/bcal/
             makeWrapper ${pkgs.lib.getExe electron} $out/bin/bcal \
               --add-flags $out/share/bcal \
               --add-flags "\''${NIXOS_OZONE_WL:+\''${WAYLAND_DISPLAY:+--ozone-platform-hint=auto}}"
-            install -Dm755 scripts/toggle $out/libexec/bcal/toggle
-            makeWrapper $out/libexec/bcal/toggle $out/bin/bcal-toggle \
-              --set BCAL_BIN $out/bin/bcal \
-              --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.jq ]}
             runHook postInstall
           '';
 

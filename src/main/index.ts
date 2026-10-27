@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { app, BrowserWindow, ipcMain, nativeTheme, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, shell, Tray } from 'electron'
 import type {
   Config,
   DateRange,
@@ -13,7 +13,7 @@ import type {
   Scope,
 } from '../shared/types'
 import { loadConfig, watchConfig } from './config'
-import { filesIn, readOpened, revealOnHyprland } from './opened'
+import { filesIn, readOpened } from './opened'
 import { type Candidate, mergePeople, parseVcards, rankPeople, readVcards } from './people'
 import { eventPlaces, Photon, type PlaceCandidate, parseVcardPlaces, rankPlaces } from './places'
 import { captureAndQuit, screenshotPath, screenshotSize } from './screenshot'
@@ -75,11 +75,25 @@ async function openFiles(paths: string[]): Promise<void> {
     }
   }
   window?.webContents.send('import:changed')
-  if (window) {
-    window.show()
-    window.focus()
-  }
-  revealOnHyprland()
+  present()
+}
+
+// Closing only hides the window; bcal keeps running until quit explicitly
+// (palette, tray). `--hidden` starts without showing it, e.g. from a service.
+let quitting = false
+const startHidden = process.argv.includes('--hidden')
+let tray: Tray | undefined
+
+/** Brings the window up (Hyprland's rule floats it on top) and focuses it. */
+function present(): void {
+  if (!window) return
+  window.show()
+  window.focus()
+}
+
+function quit(): void {
+  quitting = true
+  app.quit()
 }
 
 const theme = process.env.BCAL_THEME
@@ -106,7 +120,12 @@ function createWindow(): void {
   })
 
   if (screenshotPath) captureAndQuit(window, screenshotPath, () => app.quit())
-  else window.once('ready-to-show', () => window?.show())
+  else if (!startHidden) window.once('ready-to-show', present)
+  window.on('close', (event) => {
+    if (quitting || screenshotPath) return
+    event.preventDefault()
+    window?.hide()
+  })
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', (event) => event.preventDefault())
 
@@ -171,6 +190,8 @@ app.whenReady().then(async () => {
     if (/^https?:\/\//.test(url)) return shell.openExternal(url)
   })
   ipcMain.on('window:close', () => window?.close())
+  ipcMain.on('app:hide', () => window?.hide())
+  ipcMain.on('app:quit', quit)
 
   config = await loadConfig()
   await vdir.load()
@@ -189,19 +210,45 @@ app.whenReady().then(async () => {
   app.on('second-instance', (_event, argv, cwd) => {
     const files = filesIn(argv, cwd, app.getAppPath())
     if (files.length) openFiles(files)
-    else {
-      window?.show()
-      window?.focus()
-      revealOnHyprland()
-    }
+    else present()
   })
   createWindow()
   setImmediate(() => vdir.warmUp())
+  if (!screenshotPath) tray = createTray()
   const files = filesIn(process.argv, process.cwd(), app.getAppPath())
   if (files.length) openFiles(files)
 })
 
-app.on('window-all-closed', () => {
-  vdir.close()
-  app.quit()
+app.on('before-quit', () => {
+  quitting = true
 })
+
+app.on('will-quit', () => vdir.close())
+
+/** Tray icon (StatusNotifierItem): click shows bcal, the menu also quits it. */
+function createTray(): Tray | undefined {
+  try {
+    const icon = nativeImage.createFromPath(join(__dirname, '../../resources/tray.png'))
+    const created = new Tray(icon)
+    created.setToolTip('bcal')
+    created.on('click', present)
+    created.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: 'Öffnen', click: present },
+        {
+          label: 'Neuer Termin',
+          click: () => {
+            present()
+            window?.webContents.send('app:command', 'new')
+          },
+        },
+        { type: 'separator' },
+        { label: 'bcal beenden', click: quit },
+      ]),
+    )
+    return created
+  } catch (error) {
+    console.warn('bcal: no tray:', error)
+    return undefined
+  }
+}

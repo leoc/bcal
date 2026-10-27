@@ -48,6 +48,7 @@ Nextcloud (CalDAV) <-> pimsync (HM service) <-> ~/.calendar/<account>/<collectio
 | `1`–`9`              | show only that group; add-on groups (`toggle: true`) switch on/off |
 | `0`                  | show all calendars                                                 |
 | `x`                  | incognito: titles become "Termin", no names in details or search   |
+| `q`                  | hide the window; bcal keeps running (see below)                    |
 | `b`                  | toggle sidebar                                                     |
 | `?`                  | key help                                                           |
 
@@ -152,9 +153,9 @@ inputs.bcal.url = "github:leoc/bcal";
 home.packages = [ inputs.bcal.packages.${pkgs.stdenv.hostPlatform.system}.default ];
 ```
 
-It installs `bcal`, a desktop entry and `bcal-toggle`, which shows or hides
-bcal on the Hyprland special workspace `bcal` and starts it there if needed
-(pair it with a window rule that sends the title `bcal` to `special:bcal`).
+It installs `bcal` and a desktop entry.
+
+
 
 ## Development
 

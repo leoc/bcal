@@ -24,6 +24,8 @@ export type Action =
   | 'undo'
   | 'incognito'
   | 'groups:all'
+  | 'hide'
+  | 'quit'
   | `group:${number}`
 
 export interface Binding {
@@ -58,6 +60,8 @@ const descriptions: Record<string, string> = {
   undo: 'Letzte Änderung zurücknehmen',
   incognito: 'Inkognito (Titel ausblenden)',
   'groups:all': 'Alle Kalender',
+  hide: 'Fenster verstecken (bcal läuft weiter)',
+  quit: 'bcal beenden',
 }
 
 const defaults: [string, Action][] = [
@@ -92,6 +96,7 @@ const defaults: [string, Action][] = [
   ['Shift+Enter', 'save'],
   ['u', 'undo'],
   ['x', 'incognito'],
+  ['q', 'hide'],
   ['0', 'groups:all'],
   ...Array.from({ length: 9 }, (_, i): [string, Action] => [String(i + 1), `group:${i}`]),
 ]
