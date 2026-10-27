@@ -321,7 +321,7 @@ export class Vdir {
     const items = parsed.events.map((incoming): ImportItem => {
       const first = lead(incoming)
       const found = this.items.find((i) => i.event.uid === incoming.uid)
-      const event = preview(found?.calendarId ?? '', first)
+      const event = this.upcoming(found?.calendarId ?? '', first)
       const rid = first.getFirstPropertyValue('recurrence-id') as ICAL.Time | null
       const current = found && (rid ? found.event.getOccurrenceDetails(rid) : undefined)
       const existing = found
@@ -365,6 +365,17 @@ export class Vdir {
       }
     })
     return { method: parsed.method, items }
+  }
+
+  /** A series from outside as its next occurrence (or its last one); a single event as it is. */
+  private upcoming(calendarId: string, component: ICAL.Component): CalendarEvent {
+    const event = new ICAL.Event(component)
+    if (!event.isRecurring()) return preview(calendarId, component)
+    const [start, end, item, rid] = this.representative(
+      event,
+      ICAL.Time.fromJSDate(new Date(), true),
+    )
+    return toEvent(calendarId, event, start, end, item, rid)
   }
 
   /**
