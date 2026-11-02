@@ -1,3 +1,5 @@
+import type { PanelModes } from './panels'
+
 export interface CalendarInfo {
   /** `<account>/<collection>`, stable across runs */
   id: string
@@ -81,6 +83,8 @@ export interface Config {
   near: Geo
   /** zoom of the whole UI, 0.5-2 */
   zoom: number
+  /** how the side panels start */
+  panels: PanelModes
 }
 
 export function matchesCalendar(calendar: CalendarInfo, ref: string): boolean {

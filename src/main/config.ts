@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { parse, parseDocument } from 'yaml'
+import { defaultPanelModes, type PanelModes, parsePanelMode } from '../shared/panels'
 import type { Config, Geo, Person, Place, ViewName } from '../shared/types'
 import { parseGeo } from './places'
 import { clampZoom } from './zoom'
@@ -22,6 +23,7 @@ export const defaultConfig: Config = {
   places: [],
   near: { lat: 52.52, lon: 13.405 },
   zoom: 1,
+  panels: defaultPanelModes,
 }
 
 // Written on first start so the options are discoverable.
@@ -33,6 +35,13 @@ startView: week
 # Zoom of the whole UI, 0.5-2 (1 = 100 %). Ctrl+Plus, Ctrl+Minus and Ctrl+0
 # in the app change it and write it back here.
 zoom: 1
+
+# Side panels at start: remember (the last state, toggled with b and Enter/i
+# or the buttons), shown or hidden (on every start). Before anything was
+# remembered the calendars are shown and the details hidden.
+panels:
+  sidebar: remember
+  details: remember
 
 # Sidebar groups, in order; the order assigns the keys 1-9 (0 shows all).
 # A group's key shows only that group, except for groups with toggle: true,
@@ -127,6 +136,7 @@ export function normalize(raw: unknown): Config {
       typeof data.zoom === 'number' && Number.isFinite(data.zoom)
         ? clampZoom(data.zoom)
         : defaultConfig.zoom,
+    panels: panels(data.panels),
   }
 }
 
@@ -185,6 +195,14 @@ export function watchConfig(onChange: () => void): FSWatcher | undefined {
     })
   } catch {
     return undefined
+  }
+}
+
+function panels(value: unknown): PanelModes {
+  const raw = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
+  return {
+    sidebar: parsePanelMode(raw.sidebar) ?? defaultPanelModes.sidebar,
+    details: parsePanelMode(raw.details) ?? defaultPanelModes.details,
   }
 }
 

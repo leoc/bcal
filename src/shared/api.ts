@@ -1,3 +1,4 @@
+import type { PanelState } from './panels'
 import type {
   CalendarEvent,
   CalendarInfo,
@@ -49,6 +50,10 @@ export interface Api {
   /** calendar toggles from the UI, kept per machine */
   visibility: () => Promise<Record<string, boolean>>
   setVisibility: (visibility: Record<string, boolean>) => Promise<void>
+  /** last state of the side panels, kept per machine */
+  panels: () => Promise<Partial<PanelState>>
+  /** remembers the panels given; the others keep their state */
+  setPanels: (panels: Partial<PanelState>) => Promise<void>
   /** hides the window; bcal keeps running (tray, `bcal`, LEADER o c bring it back) */
   hide: () => void
   /** quits bcal for good */

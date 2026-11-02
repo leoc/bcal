@@ -24,6 +24,7 @@ const config: Config = {
   places: [],
   near: { lat: 52.52, lon: 13.405 },
   zoom: 1,
+  panels: { sidebar: 'remember', details: 'remember' },
 }
 const now = new Date(2026, 9, 27, 12)
 

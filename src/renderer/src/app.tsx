@@ -1,5 +1,6 @@
 import { useCalendarController } from '@fullcalendar/react'
 import deLocale from '@fullcalendar/react/locales/de'
+import { initialPanels, type PanelName, type PanelState } from '@shared/panels'
 import type {
   CalendarEvent,
   CalendarInfo,
@@ -46,25 +47,35 @@ const viewTypes: Record<ViewName, string> = {
 export function App() {
   const [config, setConfig] = useState<Config>()
   const [visibility, setVisibility] = useState<Visibility>()
+  const [panels, setPanels] = useState<Partial<PanelState>>()
   useDarkMode()
 
   useEffect(() => {
     const load = () => window.api.config().then(setConfig)
     load()
     window.api.visibility().then(setVisibility)
+    window.api.panels().then(setPanels)
     return window.api.onConfigChange(load)
   }, [])
 
   // FullCalendar takes the start view only on mount, so wait for the config.
-  return config && visibility ? <Calendar config={config} initialVisibility={visibility} /> : null
+  return config && visibility && panels ? (
+    <Calendar
+      config={config}
+      initialVisibility={visibility}
+      initialPanels={initialPanels(config.panels, panels)}
+    />
+  ) : null
 }
 
 function Calendar({
   config,
   initialVisibility,
+  initialPanels,
 }: {
   config: Config
   initialVisibility: Visibility
+  initialPanels: PanelState
 }) {
   const controller = useCalendarController()
   const [calendars, setCalendars] = useState<CalendarInfo[]>([])
@@ -73,8 +84,8 @@ function Calendar({
   // the view's own period (week, month), without the days around it
   const [current, setCurrent] = useState<{ start: Date; end: Date }>()
   const [visibility, setVisibility] = useState<Visibility>(initialVisibility)
-  const [sidebar, setSidebar] = useState(true)
-  const [details, setDetails] = useState(true)
+  const [sidebar, setSidebar] = useState(initialPanels.sidebar)
+  const [details, setDetails] = useState(initialPanels.details)
   const [help, setHelp] = useState(false)
   // hides titles and details, e.g. for screen sharing; not persisted
   const [incognito, setIncognito] = useState(false)
@@ -265,6 +276,17 @@ function Calendar({
     (calendar: CalendarInfo) =>
       updateVisibility((prev, visibleIn) => ({ ...prev, [calendar.id]: !visibleIn(calendar) })),
     [updateVisibility],
+  )
+
+  /** A toggle by key, command or button: remembered for the next start. */
+  const togglePanel = useCallback(
+    (name: PanelName) => {
+      const next = !(name === 'sidebar' ? sidebar : details)
+      if (name === 'sidebar') setSidebar(next)
+      else setDetails(next)
+      window.api.setPanels({ [name]: next })
+    },
+    [sidebar, details],
   )
 
   const discardDraft = useCallback(() => {
@@ -523,7 +545,7 @@ function Calendar({
       else if (action === 'view:list') controller.changeView(viewTypes.agenda)
       else if (action === 'focus:next') moveFocus(1)
       else if (action === 'focus:prev') moveFocus(-1)
-      else if (action === 'details') setDetails((d) => !d)
+      else if (action === 'details') togglePanel('details')
       else if (action === 'open-link') {
         const link = (draftEvent ?? focused)?.links[0]
         if (link) window.api.openLink(link)
@@ -541,7 +563,7 @@ function Calendar({
       else if (action === 'search') setPalette('search')
       else if (action === 'save' && draftActive) save()
       else if (action === 'undo') undo()
-      else if (action === 'toggle:sidebar') setSidebar((s) => !s)
+      else if (action === 'toggle:sidebar') togglePanel('sidebar')
       else if (action === 'help') setHelp((h) => !h)
       else if (action === 'close') {
         if (help) setHelp(false)
@@ -571,6 +593,7 @@ function Calendar({
       discardDraft,
       updateVisibility,
       groups,
+      togglePanel,
     ],
   )
 
@@ -679,6 +702,7 @@ function Calendar({
           className="h-full"
           controller={controller}
           availableViews={Object.values(viewTypes)}
+          panels={{ sidebar, details, onToggle: togglePanel }}
           initialView={viewTypes[config.startView]}
           borderless
           height="100%"

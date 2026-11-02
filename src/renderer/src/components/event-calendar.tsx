@@ -9,7 +9,7 @@ import listPlugin from '@fullcalendar/react/list'
 import multiMonthPlugin from '@fullcalendar/react/multimonth'
 import timeGridPlugin from '@fullcalendar/react/timegrid'
 import { EventCalendarCloseIcon } from '@/components/event-calendar-icons'
-import { EventCalendarToolbar } from '@/components/event-calendar-toolbar'
+import { EventCalendarToolbar, type PanelButtons } from '@/components/event-calendar-toolbar'
 import { EventCalendarViews } from '@/components/ui/event-calendar-views'
 import { cn } from '@/lib/utils'
 
@@ -36,12 +36,14 @@ export interface EventCalendarProps
     hint?: string
     click?: (ev: MouseEvent) => void
   }
+  panels?: PanelButtons
 }
 
 export function EventCalendar({
   controller: externalController,
   availableViews = defaultAvailableViews,
   addButton,
+  panels,
   className,
   height,
   contentHeight,
@@ -77,6 +79,7 @@ export function EventCalendar({
         controller={controller}
         availableViews={availableViews}
         addButton={addButton}
+        panels={panels}
       />
       <div className="grow min-h-0">
         <EventCalendarViews

@@ -33,7 +33,7 @@ Nextcloud (CalDAV) <-> pimsync (HM service) <-> ~/.calendar/<account>/<collectio
 | `t`                  | today                                                              |
 | `w` `m` `d` `a`      | week, month, day, agenda                                           |
 | `j` / `k`, `↓` / `↑` | next / previous event                                              |
-| `Enter`, `i`         | toggle details panel                                               |
+| `Enter`, `i`         | toggle details panel (off at first start, then remembered)         |
 | `o`                  | open the event's first link                                        |
 | `Esc`                | clear focus / close                                                |
 | `g`                  | go to date (`fr`, `12.11.`, `kw 45`, `+3`, `nächsten Freitag`)     |
@@ -49,7 +49,7 @@ Nextcloud (CalDAV) <-> pimsync (HM service) <-> ~/.calendar/<account>/<collectio
 | `0`                  | show all calendars                                                 |
 | `x`                  | incognito: titles become "Termin", no names in details or search   |
 | `q`                  | hide the window; bcal keeps running (see below)                    |
-| `b`                  | toggle sidebar                                                     |
+| `b`                  | toggle sidebar (remembered; also the buttons left and right)       |
 | `Ctrl+=` / `Ctrl+-`  | zoom the whole UI in / out (also `Ctrl`+wheel), `Ctrl+0` resets    |
 | `?`                  | key help                                                           |
 
@@ -142,7 +142,8 @@ the import and the deletions together.
 
 `~/.config/bcal/config.yml` (or `BCAL_CONFIG`) is written with commented
 defaults on first start and reloaded on save: start view, UI `zoom` (0.5–2;
-the zoom keys write it back, comments in the file stay), sidebar groups (their
+the zoom keys write it back, comments in the file stay), side `panels`
+(`remember` the last state, or always start `shown`/`hidden`), sidebar groups (their
 order assigns the keys 1–9; `toggle: true` makes a group an add-on that its
 key switches on and off), calendars hidden by default, defaults for new events
 (calendar, duration, alarm, `organizer`, `video` room URL), own places

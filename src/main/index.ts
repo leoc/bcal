@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, shell, Tray } from 'electron'
+import type { PanelState } from '../shared/panels'
 import type {
   Config,
   DateRange,
@@ -55,6 +56,7 @@ const stateDir = join(
 )
 app.setPath('userData', stateDir)
 const visibility = new State<Record<string, boolean>>(stateDir, 'visibility', {})
+const panels = new State<Partial<PanelState>>(stateDir, 'panels', {})
 
 // One bcal per state dir: a second start hands its files over and quits.
 if (!screenshotPath && !app.requestSingleInstanceLock()) app.exit(0)
@@ -177,6 +179,10 @@ app.whenReady().then(async () => {
   ipcMain.handle('state:visibility', () => visibility.read())
   ipcMain.handle('state:setVisibility', (_event, value: Record<string, boolean>) =>
     visibility.write(value),
+  )
+  ipcMain.handle('state:panels', () => panels.read())
+  ipcMain.handle('state:setPanels', async (_event, value: Partial<PanelState>) =>
+    panels.write({ ...(await panels.read()), ...value }),
   )
   ipcMain.handle('vdir:calendars', () => vdir.calendars())
   ipcMain.handle('vdir:events', (_event, range: DateRange) => vdir.events(range))

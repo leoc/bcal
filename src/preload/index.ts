@@ -39,6 +39,8 @@ const api: Api = {
   },
   visibility: () => ipcRenderer.invoke('state:visibility'),
   setVisibility: (visibility) => ipcRenderer.invoke('state:setVisibility', visibility),
+  panels: () => ipcRenderer.invoke('state:panels'),
+  setPanels: (panels) => ipcRenderer.invoke('state:setPanels', panels),
 }
 
 contextBridge.exposeInMainWorld('api', api)
