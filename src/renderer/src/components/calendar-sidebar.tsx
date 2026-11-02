@@ -1,5 +1,5 @@
-import type { CalendarInfo } from '@shared/types'
-import { EyeOff } from 'lucide-react'
+import type { CalendarInfo, SyncStatus } from '@shared/types'
+import { AlertCircle, Check, EyeOff, RefreshCw } from 'lucide-react'
 import { MiniMonth } from '@/components/mini-month'
 import type { Group } from '@/lib/calendars'
 import { type DayRange, shadeFor } from '@/lib/month'
@@ -13,6 +13,8 @@ interface Props {
   /** what the calendar shows: its month in the mini month, a week or day shaded */
   current?: DayRange
   onPickDate?: (date: Date) => void
+  sync?: SyncStatus
+  onSync?: () => void
 }
 
 const keyClass =
@@ -25,6 +27,8 @@ export function CalendarSidebar({
   onToggle,
   current,
   onPickDate,
+  sync,
+  onSync,
 }: Props) {
   const shaded = shadeFor(current)
   return (
@@ -92,11 +96,49 @@ export function CalendarSidebar({
           </section>
         ))}
       </div>
+      {sync && onSync && <SyncLine status={sync} onSync={onSync} />}
       <div className="flex items-center gap-1.5 border-t px-5 py-3 text-xs text-muted-foreground">
         <kbd className={keyClass}>0</kbd> alle
         <span className="px-1">·</span>
         <kbd className={keyClass}>?</kbd> Tastenkürzel
       </div>
     </aside>
+  )
+}
+
+const clock = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' })
+
+/** How the last pimsync run went; a click (or S) syncs now. */
+function SyncLine({ status, onSync }: { status: SyncStatus; onSync: () => void }) {
+  const when = status.at ? clock.format(new Date(status.at)) : undefined
+  const text = status.running
+    ? 'Synchronisiere …'
+    : status.ok === false
+      ? `Sync fehlgeschlagen${when ? ` · ${when}` : ''}`
+      : status.ok
+        ? `Sync ${when} · ${status.summary}`
+        : 'Noch nicht synchronisiert'
+  const Icon = status.running
+    ? RefreshCw
+    : status.ok === false
+      ? AlertCircle
+      : status.ok
+        ? Check
+        : RefreshCw
+  return (
+    <button
+      type="button"
+      tabIndex={-1}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onSync}
+      title={status.error ?? 'Jetzt synchronisieren (S)'}
+      className={cn(
+        'mx-2 mb-2 flex items-center gap-2 rounded-md px-3 py-1.5 text-left text-xs text-muted-foreground hover:bg-sidebar-accent',
+        status.ok === false && !status.running && 'text-destructive',
+      )}
+    >
+      <Icon className={cn('size-3.5 shrink-0', status.running && 'animate-spin')} />
+      <span className="truncate">{text}</span>
+    </button>
   )
 }

@@ -20,6 +20,7 @@ import { type Candidate, mergePeople, parseVcards, rankPeople, readVcards } from
 import { eventPlaces, Photon, type PlaceCandidate, parseVcardPlaces, rankPlaces } from './places'
 import { captureAndQuit, screenshotPath, screenshotSize } from './screenshot'
 import { State } from './state'
+import { Sync } from './sync'
 import { Vdir } from './vdir'
 import { stepZoom, type ZoomChange, zoomKey } from './zoom'
 
@@ -126,6 +127,33 @@ function changeZoom(change: ZoomChange): void {
   }, 400)
 }
 
+// pimsync on demand (S, palette), after own writes and on an interval, as
+// config.yml says. Screenshot runs only sync a config given explicitly, so a
+// test never reaches the real server.
+const sync = new Sync(
+  () => config.sync,
+  (status) => window?.webContents.send('sync:changed', status),
+)
+let syncSoon: NodeJS.Timeout | undefined
+let syncTimer: NodeJS.Timeout | undefined
+
+function syncAllowed(): boolean {
+  return !screenshotPath || Boolean(config.sync.config)
+}
+
+/** After an own write: push it in `afterWrite` seconds, if configured. */
+function syncAfterWrite(): void {
+  if (!config.sync.afterWrite || !syncAllowed()) return
+  clearTimeout(syncSoon)
+  syncSoon = setTimeout(() => sync.run(), config.sync.afterWrite * 1000)
+}
+
+function scheduleSync(): void {
+  clearInterval(syncTimer)
+  if (config.sync.interval && syncAllowed())
+    syncTimer = setInterval(() => sync.run(), config.sync.interval * 60_000)
+}
+
 const theme = process.env.BCAL_THEME
 if (theme === 'dark' || theme === 'light') nativeTheme.themeSource = theme
 
@@ -191,6 +219,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('vdir:create', async (_event, input: NewEvent) => {
     const created = await vdir.create(input, { organizer: config.organizer })
     window?.webContents.send('vdir:changed')
+    syncAfterWrite()
     return created
   })
   ipcMain.handle('people:search', async (_event, query: string) => {
@@ -206,19 +235,23 @@ app.whenReady().then(async () => {
   ipcMain.handle('vdir:update', async (_event, ref: EventRef, input: EventInput, scope: Scope) => {
     const updated = await vdir.update(ref, input, scope, { organizer: config.organizer })
     window?.webContents.send('vdir:changed')
+    syncAfterWrite()
     return updated
   })
   ipcMain.handle('vdir:remove', async (_event, ref: EventRef, scope: Scope) => {
     await vdir.remove(ref, scope, { organizer: config.organizer })
     window?.webContents.send('vdir:changed')
+    syncAfterWrite()
   })
   ipcMain.handle('vdir:cancel', async (_event, ref: EventRef, scope: Scope, mode: CancelMode) => {
     await vdir.cancel(ref, scope, mode, { organizer: config.organizer })
     window?.webContents.send('vdir:changed')
+    syncAfterWrite()
   })
   ipcMain.handle('vdir:undo', async () => {
     const undone = await vdir.undo()
     window?.webContents.send('vdir:changed')
+    syncAfterWrite()
     return undone
   })
   ipcMain.handle('import:take', () => {
@@ -231,8 +264,15 @@ app.whenReady().then(async () => {
     if (text === undefined) throw new Error('Import nicht mehr da')
     const created = await vdir.applyImport(text, decisions, me())
     window?.webContents.send('vdir:changed')
+    syncAfterWrite()
     return created
   })
+  ipcMain.handle('sync:status', () => sync.get())
+  ipcMain.handle('sync:run', () =>
+    syncAllowed()
+      ? sync.run()
+      : { running: false, ok: false, error: 'Sync im Screenshot-Modus aus' },
+  )
   ipcMain.handle('shell:open', (_event, url: string) => {
     if (/^https?:\/\//.test(url)) return shell.openExternal(url)
   })
@@ -242,6 +282,7 @@ app.whenReady().then(async () => {
 
   config = await loadConfig()
   zoom = config.zoom
+  scheduleSync()
   await vdir.load()
   if (!screenshotPath) {
     vdir.watch(() => {
@@ -252,6 +293,7 @@ app.whenReady().then(async () => {
     watchConfig(async () => {
       config = await loadConfig()
       places = undefined
+      scheduleSync()
       // an edit by hand wins; our own write-back brings the same value
       if (config.zoom !== zoom && config.zoom !== zoomWritten) {
         zoom = config.zoom

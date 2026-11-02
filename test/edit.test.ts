@@ -25,6 +25,7 @@ const config: Config = {
   near: { lat: 52.52, lon: 13.405 },
   zoom: 1,
   panels: { sidebar: 'remember', details: 'remember' },
+  sync: { command: 'pimsync', pairs: [], afterWrite: 0, interval: 0 },
 }
 const now = new Date(2026, 9, 27, 12)
 

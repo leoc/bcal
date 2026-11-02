@@ -46,6 +46,7 @@ keymap: { n: next, h: none }
       near: { lat: 52.52, lon: 13.405 },
       zoom: 1,
       panels: { sidebar: 'remember', details: 'remember' },
+      sync: { command: 'pimsync', config: undefined, pairs: [], afterWrite: 0, interval: 0 },
     })
   })
 

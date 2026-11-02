@@ -4,7 +4,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { parse, parseDocument } from 'yaml'
 import { defaultPanelModes, type PanelModes, parsePanelMode } from '../shared/panels'
-import type { Config, Geo, Person, Place, ViewName } from '../shared/types'
+import type { Config, Geo, Person, Place, SyncSettings, ViewName } from '../shared/types'
 import { parseGeo } from './places'
 import { clampZoom } from './zoom'
 
@@ -24,6 +24,7 @@ export const defaultConfig: Config = {
   near: { lat: 52.52, lon: 13.405 },
   zoom: 1,
   panels: defaultPanelModes,
+  sync: { command: 'pimsync', pairs: [], afterWrite: 0, interval: 0 },
 }
 
 // Written on first start so the options are discoverable.
@@ -42,6 +43,17 @@ zoom: 1
 panels:
   sidebar: remember
   details: remember
+
+# Sync with pimsync from the app: S (or the palette) syncs now, the sidebar
+# shows how the last run went. afterWrite pushes own changes that many
+# seconds after a write, interval syncs every n minutes (0 = off). Leave
+# both at 0 while a pimsync service (pimsync daemon) keeps the vdir in sync.
+sync:
+  command: pimsync
+  # config: ~/.config/pimsync/pimsync.conf
+  pairs: []
+  afterWrite: 0
+  interval: 0
 
 # Sidebar groups, in order; the order assigns the keys 1-9 (0 shows all).
 # A group's key shows only that group, except for groups with toggle: true,
@@ -137,6 +149,7 @@ export function normalize(raw: unknown): Config {
         ? clampZoom(data.zoom)
         : defaultConfig.zoom,
     panels: panels(data.panels),
+    sync: sync(data.sync),
   }
 }
 
@@ -195,6 +208,19 @@ export function watchConfig(onChange: () => void): FSWatcher | undefined {
     })
   } catch {
     return undefined
+  }
+}
+
+function sync(value: unknown): SyncSettings {
+  const raw = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
+  const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
+  const count = (v: unknown) => (typeof v === 'number' && v > 0 ? v : 0)
+  return {
+    command: text(raw.command) ?? defaultConfig.sync.command,
+    config: text(raw.config),
+    pairs: Array.isArray(raw.pairs) ? raw.pairs.filter((p) => typeof p === 'string') : [],
+    afterWrite: count(raw.afterWrite),
+    interval: count(raw.interval),
   }
 }
 

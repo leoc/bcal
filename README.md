@@ -48,6 +48,7 @@ Nextcloud (CalDAV) <-> pimsync (HM service) <-> ~/.calendar/<account>/<collectio
 | `/`                  | search all events                                                  |
 | `1`–`9`              | show only that group; add-on groups (`toggle: true`) switch on/off |
 | `0`                  | show all calendars                                                 |
+| `S`                  | sync now with pimsync (pull and push)                              |
 | `x`                  | incognito: titles become "Termin", no names in details or search   |
 | `q`                  | hide the window; bcal keeps running (see below)                    |
 | `b`                  | toggle sidebar (remembered; also the buttons left and right)       |
@@ -173,9 +174,20 @@ are kept per machine. Chromium state lives in `~/.local/state/bcal`.
 
 ## Sync
 
-Configured in `~/.nixos-config/home/arthur/shared/programs/calendar.nix`
-(`programs.pimsync`, `services.pimsync`, `accounts.calendar.accounts.*.pimsync`).
-The vdir root defaults to `~/.calendar`; override with `BCAL_VDIR`.
+bcal runs [pimsync](https://pimsync.whynothugo.nl/) itself when asked: `S`
+(or "Jetzt synchronisieren" in the palette, or a click on the sync line in the
+sidebar) runs `pimsync sync` once, pulling and pushing, e.g. to get an event
+onto the phone right away. The sidebar shows when the last run was and what it
+did; errors show there and as a message. The `sync:` section of `config.yml`
+sets the pimsync `config` file (pimsync's own default otherwise), the `pairs`
+to sync, `afterWrite` (push own changes that many seconds after a write) and
+`interval` (minutes). Keep the last two at 0 while a pimsync service keeps the
+vdir in sync, so two runs never work on the same status at once.
+
+The Nix package puts pimsync on `PATH` (after your own). pimsync's own
+configuration (storages, credentials) stays with pimsync; mine is in
+`~/.nixos-config/home/arthur/shared/programs/calendar.nix`. The vdir root
+defaults to `~/.calendar`; override with `BCAL_VDIR`.
 
 ## Install
 

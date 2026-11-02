@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { Api } from '../shared/api'
+import type { SyncStatus } from '../shared/types'
 
 function subscribe(channel: string, listener: () => void) {
   const handler = () => listener()
@@ -19,6 +20,15 @@ const api: Api = {
   remove: (ref, scope) => ipcRenderer.invoke('vdir:remove', ref, scope),
   cancel: (ref, scope, mode) => ipcRenderer.invoke('vdir:cancel', ref, scope, mode),
   undo: () => ipcRenderer.invoke('vdir:undo'),
+  syncStatus: () => ipcRenderer.invoke('sync:status'),
+  sync: () => ipcRenderer.invoke('sync:run'),
+  onSyncStatus: (listener) => {
+    const handler = (_event: unknown, status: SyncStatus) => listener(status)
+    ipcRenderer.on('sync:changed', handler)
+    return () => {
+      ipcRenderer.off('sync:changed', handler)
+    }
+  },
   people: (query) => ipcRenderer.invoke('people:search', query),
   places: (query) => ipcRenderer.invoke('places:search', query),
   mapPlaces: (query) => ipcRenderer.invoke('places:map', query),

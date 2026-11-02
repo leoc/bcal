@@ -21,6 +21,7 @@ export type Action =
   | 'edit-draft'
   | 'delete'
   | 'cancel'
+  | 'sync'
   | 'save'
   | 'undo'
   | 'incognito'
@@ -58,6 +59,7 @@ const descriptions: Record<string, string> = {
   'edit-draft': 'Bearbeiten (Termin oder Entwurf)',
   delete: 'Termin löschen',
   cancel: 'Absagen (durchgestrichen) / Absage zurücknehmen',
+  sync: 'Jetzt synchronisieren (pimsync)',
   save: 'Entwurf speichern',
   undo: 'Letzte Änderung zurücknehmen',
   incognito: 'Inkognito (Titel ausblenden)',
@@ -96,6 +98,7 @@ const defaults: [string, Action][] = [
   ['Delete', 'delete'],
   ['D', 'delete'],
   ['c', 'cancel'],
+  ['S', 'sync'],
   ['Shift+Enter', 'save'],
   ['u', 'undo'],
   ['x', 'incognito'],

@@ -90,6 +90,31 @@ export interface Config {
   zoom: number
   /** how the side panels start */
   panels: PanelModes
+  /** pimsync runs from the app */
+  sync: SyncSettings
+}
+
+export interface SyncSettings {
+  /** the pimsync binary; the package puts one on PATH */
+  command: string
+  /** pimsync's config file; its own default when unset */
+  config?: string
+  /** pairs to sync; all when empty */
+  pairs: string[]
+  /** sync this many seconds after an own write (push it now); 0 = off */
+  afterWrite: number
+  /** sync every this many minutes; 0 = only on demand */
+  interval: number
+}
+
+export interface SyncStatus {
+  running: boolean
+  /** start of the last finished run, ISO */
+  at?: string
+  ok?: boolean
+  /** what the last good run did, e.g. `2 Änderungen` */
+  summary?: string
+  error?: string
 }
 
 export function matchesCalendar(calendar: CalendarInfo, ref: string): boolean {

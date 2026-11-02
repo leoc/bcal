@@ -40,6 +40,7 @@
             cp -r out resources package.json $out/share/bcal/
             makeWrapper ${pkgs.lib.getExe electron} $out/bin/bcal \
               --add-flags $out/share/bcal \
+              --suffix PATH : ${pkgs.lib.makeBinPath [ pkgs.pimsync ]} \
               --add-flags "\''${NIXOS_OZONE_WL:+\''${WAYLAND_DISPLAY:+--ozone-platform-hint=auto}}"
             runHook postInstall
           '';
@@ -76,6 +77,8 @@
           buildInputs = [
             pkgs.nodejs_22
             electron
+            # sync from the app; tests sync two local vdirs with it
+            pkgs.pimsync
           ];
 
           # The prebuilt Electron binary from npm does not run on NixOS. Use the

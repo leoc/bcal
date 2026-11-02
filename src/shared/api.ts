@@ -15,6 +15,7 @@ import type {
   Person,
   Place,
   Scope,
+  SyncStatus,
 } from './types'
 
 export interface Api {
@@ -38,6 +39,11 @@ export interface Api {
   remove: (ref: EventRef, scope: Scope) => Promise<void>
   /** cancels an event without deleting it (struck through), or lifts the cancellation */
   cancel: (ref: EventRef, scope: Scope, mode: CancelMode) => Promise<void>
+  /** how the last pimsync run went, and whether one runs */
+  syncStatus: () => Promise<SyncStatus>
+  /** runs pimsync now (pull and push); resolves when it is done */
+  sync: () => Promise<SyncStatus>
+  onSyncStatus: (listener: (status: SyncStatus) => void) => () => void
   /** takes back the last write of this session; what it was, or undefined if none */
   undo: () => Promise<string | undefined>
   /** .ics files opened with bcal since the last call (xdg-open, mu4e) */

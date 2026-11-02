@@ -13,9 +13,10 @@ import type {
   Person,
   Place,
   Scope,
+  SyncStatus,
   ViewName,
 } from '@shared/types'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarSidebar } from '@/components/calendar-sidebar'
 import { Choice, type ChoiceOption } from '@/components/choice'
 import { CommandPalette, type PaletteMode } from '@/components/command-palette'
@@ -121,8 +122,29 @@ function Calendar({
   const [importTarget, setImportTarget] = useState<string>()
   const [canUndo, setCanUndo] = useState(false)
   const [toast, setToast] = useState<string>()
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({ running: false })
 
   useEffect(() => window.api.onChange(() => setRevision((r) => r + 1)), [])
+
+  const syncRunning = useRef(false)
+  useEffect(() => {
+    window.api.syncStatus().then(setSyncStatus)
+    // runs in the background (after writes, interval) only speak up on errors
+    return window.api.onSyncStatus((status) => {
+      if (syncRunning.current && !status.running && status.ok === false)
+        setToast(`Sync fehlgeschlagen: ${status.error}`)
+      syncRunning.current = status.running
+      setSyncStatus(status)
+    })
+  }, [])
+
+  const syncNow = useCallback(async () => {
+    setToast('Synchronisiere …')
+    const status = await window.api.sync()
+    setToast(
+      status.ok ? `Synchronisiert · ${status.summary}` : `Sync fehlgeschlagen: ${status.error}`,
+    )
+  }, [])
 
   useEffect(() => {
     const take = () =>
@@ -629,6 +651,7 @@ function Calendar({
         else if (focused) startEdit(focused)
       } else if (action === 'delete' && focused && !draftEvent) remove(focused)
       else if (action === 'cancel' && focused && !draftEvent) cancel(focused)
+      else if (action === 'sync') syncNow()
       else if (action === 'command') setPalette('command')
       else if (action === 'goto') setPalette('goto')
       else if (action === 'search') setPalette('search')
@@ -659,6 +682,7 @@ function Calendar({
       startEdit,
       remove,
       cancel,
+      syncNow,
       save,
       undo,
       help,
@@ -695,6 +719,7 @@ function Calendar({
       ['view:day', 'Ansicht: Tag'],
       ['view:list', 'Ansicht: Agenda'],
       ['groups:all', 'Alle Kalender zeigen'],
+      ['sync', 'Jetzt synchronisieren'],
       ['incognito', incognito ? 'Inkognito aus' : 'Inkognito an'],
       ['toggle:sidebar', 'Seitenleiste ein/aus'],
       ['details', 'Details ein/aus'],
@@ -769,6 +794,8 @@ function Calendar({
           incognito={incognito}
           onToggle={toggle}
           current={current}
+          sync={syncStatus}
+          onSync={syncNow}
           onPickDate={(date) => controller.gotoDate(date)}
         />
       )}
