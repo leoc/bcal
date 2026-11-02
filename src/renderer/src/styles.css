@@ -131,6 +131,15 @@
   z-index: 10;
 }
 
+/* cancelled, kept in the calendar */
+.bcal-cancelled {
+  opacity: 0.5;
+}
+.bcal-cancelled,
+.bcal-cancelled * {
+  text-decoration: line-through;
+}
+
 /* unsaved draft from the palette */
 .bcal-draft {
   opacity: 0.8;

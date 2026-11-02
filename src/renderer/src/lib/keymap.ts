@@ -20,6 +20,7 @@ export type Action =
   | 'command'
   | 'edit-draft'
   | 'delete'
+  | 'cancel'
   | 'save'
   | 'undo'
   | 'incognito'
@@ -56,6 +57,7 @@ const descriptions: Record<string, string> = {
   command: 'Befehle',
   'edit-draft': 'Bearbeiten (Termin oder Entwurf)',
   delete: 'Termin löschen',
+  cancel: 'Absagen (durchgestrichen) / Absage zurücknehmen',
   save: 'Entwurf speichern',
   undo: 'Letzte Änderung zurücknehmen',
   incognito: 'Inkognito (Titel ausblenden)',
@@ -93,6 +95,7 @@ const defaults: [string, Action][] = [
   ['e', 'edit-draft'],
   ['Delete', 'delete'],
   ['D', 'delete'],
+  ['c', 'cancel'],
   ['Shift+Enter', 'save'],
   ['u', 'undo'],
   ['x', 'incognito'],

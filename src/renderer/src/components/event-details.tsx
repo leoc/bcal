@@ -48,14 +48,32 @@ export function EventDetails({ event, calendar, draft, place, incognito, onOpenL
                 style={{ backgroundColor: calendar?.color }}
               />
               {calendar?.name}
-              {shown.status === 'CANCELLED' && <span className="text-destructive">abgesagt</span>}
+              {shown.cancelled && (
+                <span
+                  className="text-destructive"
+                  title={
+                    shown.cancelled === 'quiet'
+                      ? 'Nur hier durchgestrichen, die Teilnehmer wissen nichts davon'
+                      : undefined
+                  }
+                >
+                  {shown.cancelled === 'quiet' ? 'abgesagt (nur hier)' : 'abgesagt'}
+                </span>
+              )}
               {draft && (
                 <span className="rounded border border-dashed px-1.5 text-[11px] text-foreground">
                   {draft === 'import' ? 'Import' : 'Entwurf'}
                 </span>
               )}
             </div>
-            <h2 className="text-lg leading-snug font-semibold">{shown.title}</h2>
+            <h2
+              className={cn(
+                'text-lg leading-snug font-semibold',
+                shown.cancelled && 'text-muted-foreground line-through',
+              )}
+            >
+              {shown.title}
+            </h2>
             <p className="mt-1 text-muted-foreground">{formatWhen(shown)}</p>
           </div>
 

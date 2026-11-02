@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, shell, Tray } from 'electron'
 import type { PanelState } from '../shared/panels'
 import type {
+  CancelMode,
   Config,
   DateRange,
   EventInput,
@@ -209,6 +210,10 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle('vdir:remove', async (_event, ref: EventRef, scope: Scope) => {
     await vdir.remove(ref, scope, { organizer: config.organizer })
+    window?.webContents.send('vdir:changed')
+  })
+  ipcMain.handle('vdir:cancel', async (_event, ref: EventRef, scope: Scope, mode: CancelMode) => {
+    await vdir.cancel(ref, scope, mode, { organizer: config.organizer })
     window?.webContents.send('vdir:changed')
   })
   ipcMain.handle('vdir:undo', async () => {

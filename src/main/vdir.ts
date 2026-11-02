@@ -31,7 +31,16 @@ import type {
   Superseded,
 } from '../shared/types'
 import { attendees, links, person } from './details'
-import { deleteEvent, type EditOptions, editEvent, organizerOf, registerTimezones } from './editor'
+import {
+  type CancelMode,
+  cancelEvent,
+  deleteEvent,
+  type EditOptions,
+  editEvent,
+  organizerOf,
+  quietlyCancelled,
+  registerTimezones,
+} from './editor'
 import {
   cancelledText,
   importedText,
@@ -294,6 +303,26 @@ export class Vdir {
     const item = this.find(ref)
     const ics = deleteEvent(await readFile(item.path, 'utf8'), ref, scope, options)
     await this.write('Löschen', [{ path: item.path, ics }])
+  }
+
+  /**
+   * Cancels an event without deleting it, or lifts the cancellation (see
+   * `cancelEvent`). Undo takes it back like any other write.
+   */
+  async cancel(
+    ref: EventRef,
+    scope: Scope,
+    mode: CancelMode,
+    options: EditOptions = {},
+  ): Promise<void> {
+    const item = this.find(ref)
+    const result = cancelEvent(await readFile(item.path, 'utf8'), ref, scope, mode, options)
+    const changes: Change[] = [{ path: item.path, ics: result.ics }]
+    if (result.split) {
+      const path = join(this.root, ref.calendarId, `${result.split.uid}.ics`)
+      changes.push({ path, ics: result.split.ics, fresh: true })
+    }
+    await this.write(mode === 'lift' ? 'Absage zurückgenommen' : 'Absage', changes)
   }
 
   /**
@@ -584,6 +613,13 @@ function toEvent(
   const component = item.component
   const url = component.getFirstPropertyValue('url')
   const status = component.getFirstPropertyValue('status')
+  const cancelled =
+    status === 'CANCELLED'
+      ? 'notified'
+      : quietlyCancelled(master.component, recurrenceId?.toString()) ||
+          (component !== master.component && quietlyCancelled(component))
+        ? 'quiet'
+        : undefined
   const rrule = master.component.getFirstPropertyValue('rrule')
   return {
     id: `${calendarId}/${master.uid}/${start.toString()}`,
@@ -599,6 +635,7 @@ function toEvent(
     rrule: rrule ? rrule.toString() : undefined,
     geo: geoOf(component) ?? geoOf(master.component),
     status: typeof status === 'string' ? status : undefined,
+    cancelled,
     organizer: person(component.getFirstProperty('organizer')),
     attendees: attendees(component),
     links: links(typeof url === 'string' ? url : undefined, item.location, item.description),

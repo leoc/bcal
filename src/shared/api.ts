@@ -2,6 +2,7 @@ import type { PanelState } from './panels'
 import type {
   CalendarEvent,
   CalendarInfo,
+  CancelMode,
   Config,
   Created,
   DateRange,
@@ -35,6 +36,8 @@ export interface Api {
   update: (ref: EventRef, input: EventInput, scope: Scope) => Promise<Created>
   /** deletes an event (into the trash), one occurrence, or a series from here on */
   remove: (ref: EventRef, scope: Scope) => Promise<void>
+  /** cancels an event without deleting it (struck through), or lifts the cancellation */
+  cancel: (ref: EventRef, scope: Scope, mode: CancelMode) => Promise<void>
   /** takes back the last write of this session; what it was, or undefined if none */
   undo: () => Promise<string | undefined>
   /** .ics files opened with bcal since the last call (xdg-open, mu4e) */

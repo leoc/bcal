@@ -4,6 +4,7 @@ import { initialPanels, type PanelName, type PanelState } from '@shared/panels'
 import type {
   CalendarEvent,
   CalendarInfo,
+  CancelMode,
   Config,
   DateRange,
   EventInput,
@@ -455,6 +456,75 @@ function Calendar({
     [incognito, config, withScope],
   )
 
+  /** `c`: cancel an own event (struck through, kept), or lift its cancellation. */
+  const cancel = useCallback(
+    (event: CalendarEvent) => {
+      const title = incognito ? 'Termin' : event.title
+      if (isLocked(event, config)) {
+        setToast(
+          `Organisiert von ${event.organizer?.name ?? event.organizer?.email}: absagen kann nur der Organisator (D nimmt ihn aus deinem Kalender)`,
+        )
+        return
+      }
+      const others = event.attendees.filter(
+        (a) => a.email && a.email.toLowerCase() !== config.organizer?.email?.toLowerCase(),
+      ).length
+      const people = `${others} ${others === 1 ? 'Person' : 'Personen'}`
+      const act = (mode: CancelMode) => async (scope: Scope) => {
+        try {
+          await window.api.cancel(
+            { calendarId: event.calendarId, uid: event.uid, recurrenceId: event.recurrenceId },
+            scope,
+            mode,
+          )
+          setCanUndo(true)
+          const told =
+            others && mode !== 'quiet' && !(mode === 'lift' && event.cancelled === 'quiet')
+          setToast(
+            `${mode === 'lift' ? 'Absage zurückgenommen' : 'Abgesagt'}${told ? ` · ${people} informiert` : ''} · u zurücknehmen`,
+          )
+        } catch (error) {
+          setToast(`Absagen fehlgeschlagen: ${reason(error)}`)
+        }
+      }
+      if (event.cancelled) {
+        withScope(event, { title: `Absage von „${title}“ zurücknehmen` }, act('lift'))
+        return
+      }
+      const withMode = (mode: CancelMode) =>
+        withScope(
+          event,
+          {
+            title: `„${title}“ absagen`,
+            destructive: true,
+            note:
+              mode === 'quiet'
+                ? 'Nur durchgestrichen, ohne Nachricht an die Teilnehmer.'
+                : others
+                  ? `${people} bekommen eine Absage.`
+                  : undefined,
+          },
+          act(mode),
+        )
+      // without attendees STATUS:CANCELLED reaches nobody: no question
+      if (!others) return withMode('notify')
+      setChoice({
+        title: `Absage an ${others} Teilnehmer senden?`,
+        note: `„${title}“ bleibt durchgestrichen im Kalender.`,
+        options: [
+          { id: 'notify', label: 'Ja, Absage senden', destructive: true },
+          { id: 'quiet', label: 'Nein, nur durchstreichen' },
+        ],
+        onPick: (id) => {
+          setChoice(undefined)
+          withMode(id as CancelMode)
+        },
+        onCancel: () => setChoice(undefined),
+      })
+    },
+    [incognito, config, withScope],
+  )
+
   const undo = useCallback(async () => {
     try {
       const undone = await window.api.undo()
@@ -558,6 +628,7 @@ function Calendar({
         if (draftActive) setPalette('create')
         else if (focused) startEdit(focused)
       } else if (action === 'delete' && focused && !draftEvent) remove(focused)
+      else if (action === 'cancel' && focused && !draftEvent) cancel(focused)
       else if (action === 'command') setPalette('command')
       else if (action === 'goto') setPalette('goto')
       else if (action === 'search') setPalette('search')
@@ -587,6 +658,7 @@ function Calendar({
       editing,
       startEdit,
       remove,
+      cancel,
       save,
       undo,
       help,
@@ -630,6 +702,7 @@ function Calendar({
       ...(focused && !draftActive
         ? ([
             ['edit-draft', 'Termin bearbeiten'],
+            ['cancel', focused.cancelled ? 'Absage zurücknehmen' : 'Termin absagen'],
             ['delete', 'Termin löschen'],
           ] as [Action, string][])
         : []),
@@ -660,7 +733,9 @@ function Calendar({
         allDay: e.allDay,
         color,
         contrastColor: contrastFor(color),
-        className: e.id === focusedId ? 'bcal-focused' : undefined,
+        className: [e.id === focusedId && 'bcal-focused', e.cancelled && 'bcal-cancelled']
+          .filter(Boolean)
+          .join(' '),
         // others' events and hidden titles stay put
         editable: !incognito && !isLocked(e, config),
       }

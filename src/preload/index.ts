@@ -17,6 +17,7 @@ const api: Api = {
   create: (event) => ipcRenderer.invoke('vdir:create', event),
   update: (ref, input, scope) => ipcRenderer.invoke('vdir:update', ref, input, scope),
   remove: (ref, scope) => ipcRenderer.invoke('vdir:remove', ref, scope),
+  cancel: (ref, scope, mode) => ipcRenderer.invoke('vdir:cancel', ref, scope, mode),
   undo: () => ipcRenderer.invoke('vdir:undo'),
   people: (query) => ipcRenderer.invoke('people:search', query),
   places: (query) => ipcRenderer.invoke('places:search', query),

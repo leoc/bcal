@@ -42,7 +42,8 @@ Nextcloud (CalDAV) <-> pimsync (HM service) <-> ~/.calendar/<account>/<collectio
 | `e`                  | change the focused event: type only what changes, or reopen draft  |
 | `Shift+Enter`        | save the draft (also right from the palette)                       |
 | `D`, `Delete`        | delete the focused event (asks first)                              |
-| `u`                  | take back the last write (new, changed or deleted event)           |
+| `c`                  | cancel the focused event (stays struck through), again: lift it    |
+| `u`                  | take back the last write (new, changed, cancelled or deleted)      |
 | `:` / `>`            | commands                                                           |
 | `/`                  | search all events                                                  |
 | `1`–`9`              | show only that group; add-on groups (`toggle: true`) switch on/off |
@@ -117,6 +118,24 @@ the reply state of attendees stay; `SEQUENCE` goes up so the server sends update
 or cancellations. Events organized by someone else can only be deleted, which
 takes them out of your calendar. Removed files go to `~/_nobackup/_deletable/bcal/`;
 `u` takes back the last write of the session, one after the other.
+
+## Cancelling events
+
+`c` on an own event cancels it without deleting it: it stays in the calendar,
+struck through and dimmed, as do events their organizer cancelled. With
+attendees bcal asks first whether they get a cancellation:
+
+- Yes: `STATUS:CANCELLED` and `SEQUENCE` + 1, the server sends the
+  cancellation.
+- No: only struck through here, as `X-BCAL-CANCELLED` on the event. Nothing
+  the server counts as a significant change is touched, so nobody gets mail;
+  other clients still show the event as planned.
+
+Without attendees it is cancelled with `STATUS:CANCELLED` right away. A series
+asks for this one, this and the following, or all (a sent cancellation of
+the following ones splits the series like an edit). `c` on a cancelled event
+lifts it (`STATUS:CONFIRMED`, attendees get an update; a quiet one stays
+quiet), `u` takes it back.
 
 ## Opening .ics files
 

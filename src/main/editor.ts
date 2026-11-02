@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import ICAL from 'ical.js'
-import type { EventInput, EventRef, Person, Scope } from '../shared/types'
+import type { CancelMode, EventInput, EventRef, Person, Scope } from '../shared/types'
 import { addPerson, BERLIN, time } from './writer'
 
 /**
@@ -374,13 +374,38 @@ export function editEvent(
 
   // following: end the old series before this occurrence, start a new one here
   const uid = options.newUid ?? randomUUID()
+  const { fresh, split } = splitSeries(root, ref.uid, { master, override, rid }, delta, uid)
+  if (input.rrule) setRrule(fresh, input.rrule)
+  touch(master, options.now ?? new Date())
+  apply(split, fresh, input, times, options)
+  return {
+    ics: serialize(root),
+    split: { uid, ics: serialize(split) },
+    start: input.start,
+    uid,
+  }
+}
+
+/**
+ * Ends the series before `rid` and moves this and the following occurrences
+ * into a new series `uid` in a calendar of its own (for a file of its own),
+ * shifted by `delta` ms. The caller changes and touches what it needs.
+ */
+function splitSeries(
+  root: ICAL.Component,
+  oldUid: string,
+  found: { master: ICAL.Component; override?: ICAL.Component; rid: ICAL.Time },
+  delta: number,
+  uid: string,
+  keepOverride = false,
+): { fresh: ICAL.Component; split: ICAL.Component; moved: ICAL.Component[] } {
+  const { master, override, rid } = found
   const fresh = clone(master)
   const { before, rule } = endBefore(master, rid)
   fresh.updatePropertyWithValue('uid', uid)
   const freshRule = rule.clone()
   if (rule.count) freshRule.count = rule.count - before
   fresh.updatePropertyWithValue('rrule', freshRule)
-  if (input.rrule) setRrule(fresh, input.rrule)
   fresh.removeAllProperties('sequence')
   const [keep, move] = partition(exdates(master), (t) => t.compare(rid) < 0)
   setExdates(master, keep)
@@ -396,22 +421,18 @@ export function editEvent(
   }
   for (const tz of root.getAllSubcomponents('vtimezone')) split.addSubcomponent(clone(tz))
   split.addSubcomponent(fresh)
-  for (const o of overridesOf(root, ref.uid)) {
+  const moved: ICAL.Component[] = []
+  for (const o of overridesOf(root, oldUid)) {
     if (ridOf(o).compare(rid) < 0) continue
     root.removeSubcomponent(o)
-    if (o === override) continue
+    // an edit replaces the edited occurrence with the new series' start
+    if (o === override && !keepOverride) continue
     o.updatePropertyWithValue('uid', uid)
     setRid(o, shifted(ridOf(o), delta), fresh)
     split.addSubcomponent(o)
+    moved.push(o)
   }
-  touch(master, options.now ?? new Date())
-  apply(split, fresh, input, times, options)
-  return {
-    ics: serialize(root),
-    split: { uid, ics: serialize(split) },
-    start: input.start,
-    uid,
-  }
+  return { fresh, split, moved }
 }
 
 function setRrule(component: ICAL.Component, value: string): void {
@@ -470,4 +491,183 @@ export function deleteEvent(
   }
   touch(master, options.now ?? new Date())
   return serialize(root)
+}
+
+/**
+ * `notify`: STATUS:CANCELLED and SEQUENCE + 1, so the server sends the
+ * attendees a cancellation. `quiet`: only struck through here, as
+ * X-BCAL-CANCELLED on the series or event; no property the server counts as
+ * significant changes, so nobody gets mail. `lift` takes either back (a
+ * notified one with STATUS:CONFIRMED, so the attendees get an update).
+ */
+export type { CancelMode } from '../shared/types'
+
+const QUIET = 'x-bcal-cancelled'
+
+/**
+ * Whether an occurrence is cancelled quietly: `ALL` on the component, its
+ * RECURRENCE-ID, or an earlier one with RANGE=THISANDFUTURE.
+ */
+export function quietlyCancelled(component: ICAL.Component, recurrenceId?: string): boolean {
+  return component.getAllProperties(QUIET).some((p) => {
+    const value = String(p.getFirstValue() ?? '')
+    if (value.toUpperCase() === 'ALL') return true
+    if (!recurrenceId) return false
+    if (value === recurrenceId) return true
+    return p.getParameter('range') === 'THISANDFUTURE' && recurrenceId >= value
+  })
+}
+
+function setStatus(component: ICAL.Component, status: 'CANCELLED' | 'CONFIRMED', now: Date) {
+  if (component.getFirstPropertyValue('status') === status) return
+  component.updatePropertyWithValue('status', status)
+  touch(component, now)
+}
+
+function addQuiet(component: ICAL.Component, value: string, range?: 'THISANDFUTURE'): void {
+  const property = new ICAL.Property(QUIET)
+  property.setValue(value)
+  if (range) property.setParameter('range', range)
+  component.addProperty(property)
+}
+
+/** Removes quiet marks: all of them, or those for `rid` (and after, for `following`). */
+function dropQuiet(component: ICAL.Component, rid?: string, following = false): void {
+  for (const p of component.getAllProperties(QUIET)) {
+    const value = String(p.getFirstValue() ?? '')
+    if (!rid || value === rid || (following && value.toUpperCase() !== 'ALL' && value >= rid)) {
+      component.removeProperty(p)
+    }
+  }
+}
+
+function modified(component: ICAL.Component, now: Date): void {
+  component.updatePropertyWithValue('last-modified', ICAL.Time.fromJSDate(now, true))
+}
+
+export interface CancelResult {
+  /** the file's new text */
+  ics: string
+  /** a second file, when a notified cancellation of "following" split a series */
+  split?: { uid: string; ics: string }
+}
+
+/**
+ * Cancels the event `ref` (or lifts a cancellation) without deleting it.
+ * For a series `scope` works as for edits: only this occurrence (an
+ * override), all of them, or this and the following ones (a notified
+ * cancellation splits the series there; a quiet one marks the range).
+ * Only own events; those of others are refused like edits.
+ */
+export function cancelEvent(
+  ics: string,
+  ref: EventRef,
+  scope: Scope,
+  mode: CancelMode,
+  options: EditOptions = {},
+): CancelResult {
+  const { root, master, override, rid } = find(ics, ref)
+  const target = master ?? override
+  if (!target) throw new Error('nothing to cancel')
+  if (isLocked(target, options.organizer)) throw new LockedError('organized by someone else')
+  const now = options.now ?? new Date()
+  const recurring = Boolean(master?.hasProperty('rrule') || master?.hasProperty('rdate'))
+  const series = recurring && master && rid && ref.recurrenceId ? master : undefined
+  const atStart = Boolean(series && rid && rid.compare(startOf(series)) === 0)
+  const whole = !series || scope === 'all' || (scope === 'following' && atStart)
+  const status: 'CANCELLED' | 'CONFIRMED' = mode === 'notify' ? 'CANCELLED' : 'CONFIRMED'
+  const result = (): CancelResult => ({ ics: serialize(root) })
+
+  // the quiet marks live on the series (or the event) itself
+  const marked = series ?? target
+  const hadQuiet = marked.getAllProperties(QUIET).length > 0
+  if (mode !== 'quiet' && hadQuiet) {
+    if (whole) dropQuiet(marked)
+    else dropQuiet(marked, ref.recurrenceId, scope === 'following')
+    modified(marked, now)
+  }
+
+  if (mode === 'quiet') {
+    if (whole) {
+      dropQuiet(marked)
+      addQuiet(marked, 'ALL')
+    } else if (ref.recurrenceId) {
+      dropQuiet(marked, ref.recurrenceId, scope === 'following')
+      addQuiet(marked, ref.recurrenceId, scope === 'following' ? 'THISANDFUTURE' : undefined)
+    }
+    modified(marked, now)
+    return result()
+  }
+
+  // lift: only notified cancellations need a new STATUS
+  const occurrence = override ?? target
+  const notified = (c: ICAL.Component) => c.getFirstPropertyValue('status') === 'CANCELLED'
+  if (mode === 'lift' && !notified(occurrence) && !(whole && hasNotified(root, ref.uid))) {
+    return result()
+  }
+
+  if (whole) {
+    for (const v of root.getAllSubcomponents('vevent')) {
+      if (v.getFirstPropertyValue('uid') !== ref.uid) continue
+      if (mode === 'lift' && !notified(v)) continue
+      setStatus(v, status, now)
+    }
+    return result()
+  }
+  if (!series || !rid) return result()
+
+  if (scope === 'this') {
+    let component = override
+    if (!component) {
+      component = clone(series)
+      for (const name of ['rrule', 'rdate', 'exdate', QUIET]) component.removeAllProperties(name)
+      startAt(component, series, rid)
+      setRid(component, rid, series)
+      root.addSubcomponent(component)
+    }
+    setStatus(component, status, now)
+    return result()
+  }
+
+  // following: a new series from here carries the status
+  const uid = options.newUid ?? randomUUID()
+  const { fresh, split, moved } = splitSeries(
+    root,
+    ref.uid,
+    { master: series, override, rid },
+    0,
+    uid,
+    true,
+  )
+  // the new series starts here, without the old one's quiet marks
+  startAt(fresh, series, rid)
+  dropQuiet(fresh)
+  touch(series, now)
+  for (const c of [fresh, ...moved]) {
+    if (mode === 'lift' && !notified(c)) continue
+    setStatus(c, status, now)
+  }
+  return { ics: serialize(root), split: { uid, ics: serialize(split) } }
+}
+
+/** Moves a copy of the series to the occurrence `rid`, keeping zones and length. */
+function startAt(component: ICAL.Component, series: ICAL.Component, rid: ICAL.Time): void {
+  const length = new ICAL.Event(series).duration
+  const start = rid.clone()
+  const end = rid.clone()
+  end.addDuration(length)
+  component.getFirstProperty('dtstart')?.setValue(start)
+  component.removeAllProperties('duration')
+  const dtend = component.getFirstProperty('dtend')
+  if (dtend) dtend.setValue(end)
+  else component.addPropertyWithValue('dtend', end)
+}
+
+function hasNotified(root: ICAL.Component, uid: string): boolean {
+  return root
+    .getAllSubcomponents('vevent')
+    .some(
+      (v) =>
+        v.getFirstPropertyValue('uid') === uid && v.getFirstPropertyValue('status') === 'CANCELLED',
+    )
 }
