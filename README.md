@@ -50,6 +50,7 @@ Nextcloud (CalDAV) <-> pimsync (HM service) <-> ~/.calendar/<account>/<collectio
 | `x`                  | incognito: titles become "Termin", no names in details or search   |
 | `q`                  | hide the window; bcal keeps running (see below)                    |
 | `b`                  | toggle sidebar                                                     |
+| `Ctrl+=` / `Ctrl+-`  | zoom the whole UI in / out (also `Ctrl`+wheel), `Ctrl+0` resets    |
 | `?`                  | key help                                                           |
 
 ## New events
@@ -140,7 +141,8 @@ the import and the deletions together.
 ## Configuration
 
 `~/.config/bcal/config.yml` (or `BCAL_CONFIG`) is written with commented
-defaults on first start and reloaded on save: start view, sidebar groups (their
+defaults on first start and reloaded on save: start view, UI `zoom` (0.5–2;
+the zoom keys write it back, comments in the file stay), sidebar groups (their
 order assigns the keys 1–9; `toggle: true` makes a group an add-on that its
 key switches on and off), calendars hidden by default, defaults for new events
 (calendar, duration, alarm, `organizer`, `video` room URL), own places

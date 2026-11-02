@@ -22,6 +22,7 @@ const config: Config = {
   emails: [],
   places: [],
   near: { lat: 52.52, lon: 13.405 },
+  zoom: 1,
 }
 const groups = arrange(calendars, config)
 const shown = (v: Record<string, boolean>) =>

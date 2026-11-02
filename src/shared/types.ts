@@ -79,6 +79,8 @@ export interface Config {
   places: Place[]
   /** map searches prefer places near this point (default: Berlin) */
   near: Geo
+  /** zoom of the whole UI, 0.5-2 */
+  zoom: number
 }
 
 export function matchesCalendar(calendar: CalendarInfo, ref: string): boolean {

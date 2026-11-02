@@ -12,13 +12,14 @@ import type {
   NewEvent,
   Scope,
 } from '../shared/types'
-import { loadConfig, watchConfig } from './config'
+import { loadConfig, watchConfig, writeConfigValue } from './config'
 import { filesIn, readOpened } from './opened'
 import { type Candidate, mergePeople, parseVcards, rankPeople, readVcards } from './people'
 import { eventPlaces, Photon, type PlaceCandidate, parseVcardPlaces, rankPlaces } from './places'
 import { captureAndQuit, screenshotPath, screenshotSize } from './screenshot'
 import { State } from './state'
 import { Vdir } from './vdir'
+import { stepZoom, type ZoomChange, zoomKey } from './zoom'
 
 const root = process.env.BCAL_VDIR ?? join(homedir(), '.calendar')
 const vdir = new Vdir(root)
@@ -96,6 +97,32 @@ function quit(): void {
   app.quit()
 }
 
+// Zoom of the whole UI from config.yml; Ctrl+Plus/Minus/0 and Ctrl+wheel change
+// it and write it back (debounced, the config watcher then reloads the same value).
+let zoom = 1
+let zoomWrite: NodeJS.Timeout | undefined
+// what we wrote last: its reload must not undo steps taken in the meantime
+let zoomWritten: number | undefined
+
+function applyZoom(): void {
+  window?.webContents.setZoomFactor(zoom)
+}
+
+function changeZoom(change: ZoomChange): void {
+  const next = stepZoom(zoom, change)
+  if (next === zoom) return
+  zoom = next
+  applyZoom()
+  if (screenshotPath) return
+  clearTimeout(zoomWrite)
+  zoomWrite = setTimeout(() => {
+    zoomWritten = zoom
+    writeConfigValue('zoom', zoom).catch((error) =>
+      console.warn('bcal: cannot write zoom to config.yml:', error),
+    )
+  }, 400)
+}
+
 const theme = process.env.BCAL_THEME
 if (theme === 'dark' || theme === 'light') nativeTheme.themeSource = theme
 
@@ -126,6 +153,15 @@ function createWindow(): void {
     event.preventDefault()
     window?.hide()
   })
+  window.webContents.on('did-finish-load', applyZoom)
+  // before the menu's and the page's own handling, so the factor stays ours
+  window.webContents.on('before-input-event', (event, input) => {
+    const change = zoomKey(input)
+    if (!change) return
+    event.preventDefault()
+    changeZoom(change)
+  })
+  window.webContents.on('zoom-changed', (_event, direction) => changeZoom(direction))
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', (event) => event.preventDefault())
 
@@ -194,6 +230,7 @@ app.whenReady().then(async () => {
   ipcMain.on('app:quit', quit)
 
   config = await loadConfig()
+  zoom = config.zoom
   await vdir.load()
   if (!screenshotPath) {
     vdir.watch(() => {
@@ -204,6 +241,11 @@ app.whenReady().then(async () => {
     watchConfig(async () => {
       config = await loadConfig()
       places = undefined
+      // an edit by hand wins; our own write-back brings the same value
+      if (config.zoom !== zoom && config.zoom !== zoomWritten) {
+        zoom = config.zoom
+        applyZoom()
+      }
       window?.webContents.send('config:changed')
     })
   }

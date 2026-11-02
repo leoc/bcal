@@ -1,6 +1,9 @@
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { defaultConfig, normalize } from '../src/main/config'
+import { defaultConfig, normalize, writeConfigValue } from '../src/main/config'
 
 describe('normalize', () => {
   it('falls back to defaults for empty or broken input', () => {
@@ -41,6 +44,7 @@ keymap: { n: next, h: none }
       video: undefined,
       places: [],
       near: { lat: 52.52, lon: 13.405 },
+      zoom: 1,
     })
   })
 
@@ -73,5 +77,36 @@ near: { lat: 48.14, lon: 11.58 }
       { name: 'Kita', label: 'Kita', geo: undefined, source: 'config' },
     ])
     expect(config.near).toEqual({ lat: 48.14, lon: 11.58 })
+  })
+})
+
+describe('zoom', () => {
+  it('reads and clamps the zoom factor', () => {
+    expect(normalize({ zoom: 0.8 }).zoom).toBe(0.8)
+    expect(normalize({ zoom: 5 }).zoom).toBe(2)
+    expect(normalize({ zoom: 0.1 }).zoom).toBe(0.5)
+    expect(normalize({ zoom: 'big' }).zoom).toBe(1)
+  })
+})
+
+describe('writeConfigValue', () => {
+  it('sets one key and keeps comments and the rest', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'bcal-config-'))
+    const path = join(dir, 'config.yml')
+    await writeFile(path, '# mine\nstartView: month # by hand\nzoom: 1\nhidden: [a]\n')
+    await writeConfigValue('zoom', 0.9, path)
+    const text = await readFile(path, 'utf8')
+    expect(text).toContain('# mine')
+    expect(text).toContain('startView: month # by hand')
+    expect(normalize(parse(text))).toMatchObject({ zoom: 0.9, startView: 'month', hidden: ['a'] })
+  })
+
+  it('adds a missing key and writes the template for a missing file', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'bcal-config-'))
+    const path = join(dir, 'sub', 'config.yml')
+    await writeConfigValue('zoom', 1.2, path)
+    const text = await readFile(path, 'utf8')
+    expect(text).toContain('# bcal configuration')
+    expect(normalize(parse(text)).zoom).toBe(1.2)
   })
 })

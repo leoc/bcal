@@ -2,9 +2,10 @@ import { existsSync, type FSWatcher, watch } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { parse } from 'yaml'
+import { parse, parseDocument } from 'yaml'
 import type { Config, Geo, Person, Place, ViewName } from '../shared/types'
 import { parseGeo } from './places'
+import { clampZoom } from './zoom'
 
 export const configPath =
   process.env.BCAL_CONFIG ?? join(homedir(), '.config', 'bcal', 'config.yml')
@@ -20,6 +21,7 @@ export const defaultConfig: Config = {
   emails: [],
   places: [],
   near: { lat: 52.52, lon: 13.405 },
+  zoom: 1,
 }
 
 // Written on first start so the options are discoverable.
@@ -27,6 +29,10 @@ const template = `# bcal configuration, reloaded on save.
 
 # week | month | day | agenda
 startView: week
+
+# Zoom of the whole UI, 0.5-2 (1 = 100 %). Ctrl+Plus, Ctrl+Minus and Ctrl+0
+# in the app change it and write it back here.
+zoom: 1
 
 # Sidebar groups, in order; the order assigns the keys 1-9 (0 shows all).
 # A group's key shows only that group, except for groups with toggle: true,
@@ -117,6 +123,10 @@ export function normalize(raw: unknown): Config {
       typeof data.video === 'string' && /^https?:\/\//.test(data.video) ? data.video : undefined,
     places: Array.isArray(data.places) ? data.places.flatMap(place) : [],
     near: geo(data.near) ?? defaultConfig.near,
+    zoom:
+      typeof data.zoom === 'number' && Number.isFinite(data.zoom)
+        ? clampZoom(data.zoom)
+        : defaultConfig.zoom,
   }
 }
 
@@ -143,6 +153,25 @@ function place(value: unknown): Place[] {
       source: 'config',
     },
   ]
+}
+
+/**
+ * Sets one top-level key in config.yml and keeps comments and the order of
+ * everything else. A missing file gets the template first.
+ */
+export async function writeConfigValue(
+  key: string,
+  value: unknown,
+  path: string = configPath,
+): Promise<void> {
+  if (!existsSync(path)) {
+    await mkdir(dirname(path), { recursive: true })
+    await writeFile(path, template)
+  }
+  const doc = parseDocument(await readFile(path, 'utf8'))
+  if (doc.errors.length) throw new Error(`${path}: ${doc.errors[0]?.message}`)
+  doc.set(key, value)
+  await writeFile(path, doc.toString())
 }
 
 /** Watches the directory, since editors replace the file on save. */
