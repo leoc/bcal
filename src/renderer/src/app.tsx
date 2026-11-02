@@ -70,6 +70,8 @@ function Calendar({
   const [calendars, setCalendars] = useState<CalendarInfo[]>([])
   const [loaded, setLoaded] = useState<{ range: DateRange; events: CalendarEvent[] }>()
   const [range, setRange] = useState<DateRange>()
+  // the view's own period (week, month), without the days around it
+  const [current, setCurrent] = useState<{ start: Date; end: Date }>()
   const [visibility, setVisibility] = useState<Visibility>(initialVisibility)
   const [sidebar, setSidebar] = useState(true)
   const [details, setDetails] = useState(true)
@@ -668,6 +670,8 @@ function Calendar({
           visible={visible}
           incognito={incognito}
           onToggle={toggle}
+          current={current}
+          onPickDate={(date) => controller.gotoDate(date)}
         />
       )}
       <main className="min-w-0 flex-1">
@@ -696,9 +700,10 @@ function Calendar({
           editable
           eventDrop={onMoved}
           eventResize={onMoved}
-          datesSet={(info) =>
+          datesSet={(info) => {
             setRange({ start: info.start.toISOString(), end: info.end.toISOString() })
-          }
+            setCurrent({ start: info.view.currentStart, end: info.view.currentEnd })
+          }}
         />
       </main>
       {(details || draftEvent || importEvent) && (

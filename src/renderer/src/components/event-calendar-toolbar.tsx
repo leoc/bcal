@@ -16,6 +16,14 @@ export interface EventCalendarToolbarProps {
   }
 }
 
+// The keyboard drives the calendar: toolbar controls never take focus, so a
+// click leaves no focus ring behind and Enter or the arrows keep their bindings
+// instead of pressing the button or switching tabs.
+const keepFocus = {
+  tabIndex: -1,
+  onMouseDown: (event: { preventDefault: () => void }) => event.preventDefault(),
+}
+
 export function EventCalendarToolbar({
   className,
   controller,
@@ -28,7 +36,7 @@ export function EventCalendarToolbar({
     <div className={cn('flex items-center justify-between flex-wrap gap-3', className)}>
       <div className="flex items-center shrink-0 gap-3">
         {addButton && (
-          <Button onClick={addButton.click as any} aria-label={addButton.hint}>
+          <Button onClick={addButton.click as any} aria-label={addButton.hint} {...keepFocus}>
             {addButton.text}
           </Button>
         )}
@@ -36,6 +44,7 @@ export function EventCalendarToolbar({
           onClick={() => controller.today()}
           aria-label={buttons.today.hint}
           variant="outline"
+          {...keepFocus}
         >
           {buttons.today.text}
         </Button>
@@ -46,6 +55,7 @@ export function EventCalendarToolbar({
             aria-label={buttons.prev.hint}
             variant="ghost"
             size="icon"
+            {...keepFocus}
           >
             <EventCalendarPrevIcon />
           </Button>
@@ -55,11 +65,12 @@ export function EventCalendarToolbar({
             aria-label={buttons.next.hint}
             variant="ghost"
             size="icon"
+            {...keepFocus}
           >
             <EventCalendarNextIcon />
           </Button>
         </div>
-        <div className="text-xl">{controller.view?.title}</div>
+        <div className="text-xl font-semibold tracking-tight">{controller.view?.title}</div>
       </div>
       <Tabs value={controller.view?.type ?? availableViews[0]}>
         <TabsList>
@@ -69,6 +80,7 @@ export function EventCalendarToolbar({
               value={availableView}
               onClick={() => controller.changeView(availableView)}
               aria-label={buttons[availableView]?.hint}
+              {...keepFocus}
             >
               {buttons[availableView]?.text}
             </TabsTrigger>

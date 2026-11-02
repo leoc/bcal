@@ -138,3 +138,9 @@
   outline-offset: 1px;
   z-index: 11;
 }
+
+/* thin scrollbars in the theme's colors */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--foreground) 20%, transparent) transparent;
+}

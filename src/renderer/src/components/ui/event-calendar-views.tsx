@@ -249,8 +249,8 @@ export function EventCalendarViews({
                   : 'size-8 text-lg',
                 info.isToday
                   ? [
-                      'bg-chart-1/50',
-                      info.hasNavLink && 'group-hover:bg-chart-1/60',
+                      'bg-primary text-primary-foreground font-semibold',
+                      info.hasNavLink && 'group-hover:bg-primary/85',
                     ]
                   : (info.hasNavLink && 'group-hover:bg-foreground/5'),
                 info.hasNavLink && 'group-focus-visible:outline-3 outline-ring/50',
@@ -267,12 +267,14 @@ export function EventCalendarViews({
         'border',
         info.isMajor && 'border-foreground/20',
         info.isDisabled && 'bg-foreground/3',
+        info.isToday && !info.inPopover && 'bg-foreground/[0.03]',
       )}
       dayCellTopClass={(info) => cn(
         'flex flex-row',
+        // at the end, clear of the inline week number at the start
         info.isNarrow
           ? 'justify-end min-h-px'
-          : 'justify-center min-h-0.5',
+          : 'justify-end min-h-0.5',
       )}
       dayCellTopInnerClass={(info) => cn(
         'flex flex-row items-center justify-center whitespace-nowrap rounded-full',
@@ -284,8 +286,8 @@ export function EventCalendarViews({
           : (info.isNarrow ? 'px-1' : 'px-2'),
         info.isToday
           ? [
-              'bg-chart-1/50',
-              info.hasNavLink && 'hover:bg-chart-1/60 focus-visible:outline-3 outline-ring/50',
+              'bg-primary text-primary-foreground font-semibold',
+              info.hasNavLink && 'hover:bg-primary/85 focus-visible:outline-3 outline-ring/50',
             ]
           : (info.hasNavLink && 'hover:bg-foreground/5'),
         info.isOther && 'text-muted-foreground',
@@ -307,6 +309,7 @@ export function EventCalendarViews({
         'border',
         info.isMajor && 'border-foreground/20',
         info.isDisabled && 'bg-foreground/3',
+        info.isToday && 'bg-foreground/[0.03]',
       )}
       dayLaneInnerClass={(info) => (
         info.isStack
@@ -337,8 +340,8 @@ export function EventCalendarViews({
                 : 'px-3',
               info.isToday
                 ? [
-                    'bg-chart-1/50',
-                    info.hasNavLink && 'hover:bg-chart-1/60 focus-visible:outline-3 outline-ring/50',
+                    'bg-primary text-primary-foreground font-semibold',
+                    info.hasNavLink && 'hover:bg-primary/85 focus-visible:outline-3 outline-ring/50',
                   ]
                 : (info.hasNavLink && 'hover:bg-foreground/5')
             ]
@@ -391,7 +394,7 @@ export function EventCalendarViews({
         info.hasNavLink && 'hover:bg-foreground/20 focus-visible:outline-3 outline-ring/50',
       )}
       nonBusinessHoursClass='bg-foreground/3'
-      highlightClass='bg-chart-1/20'
+      highlightClass='bg-foreground/8'
       nowIndicatorLineClass='-m-px border-1 border-destructive'
       nowIndicatorDotClass="-m-[6px] border-6 border-destructive size-0 rounded-full ring-2 ring-background"
 
