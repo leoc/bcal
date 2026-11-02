@@ -48,18 +48,7 @@ export function EventDetails({ event, calendar, draft, place, incognito, onOpenL
                 style={{ backgroundColor: calendar?.color }}
               />
               {calendar?.name}
-              {shown.cancelled && (
-                <span
-                  className="text-destructive"
-                  title={
-                    shown.cancelled === 'quiet'
-                      ? 'Nur hier durchgestrichen, die Teilnehmer wissen nichts davon'
-                      : undefined
-                  }
-                >
-                  {shown.cancelled === 'quiet' ? 'abgesagt (nur hier)' : 'abgesagt'}
-                </span>
-              )}
+              {shown.cancelled && <span className="text-destructive">abgesagt</span>}
               {draft && (
                 <span className="rounded border border-dashed px-1.5 text-[11px] text-foreground">
                   {draft === 'import' ? 'Import' : 'Entwurf'}

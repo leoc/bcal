@@ -122,21 +122,14 @@ takes them out of your calendar. Removed files go to `~/_nobackup/_deletable/bca
 
 ## Cancelling events
 
-`c` on an own event cancels it without deleting it: it stays in the calendar,
-struck through and dimmed, as do events their organizer cancelled. With
-attendees bcal asks first whether they get a cancellation:
-
-- Yes: `STATUS:CANCELLED` and `SEQUENCE` + 1, the server sends the
-  cancellation.
-- No: only struck through here, as `X-BCAL-CANCELLED` on the event. Nothing
-  the server counts as a significant change is touched, so nobody gets mail;
-  other clients still show the event as planned.
-
-Without attendees it is cancelled with `STATUS:CANCELLED` right away. A series
-asks for this one, this and the following, or all (a sent cancellation of
-the following ones splits the series like an edit). `c` on a cancelled event
-lifts it (`STATUS:CONFIRMED`, attendees get an update; a quiet one stays
-quiet), `u` takes it back.
+`c` on an own event cancels it without deleting it: `STATUS:CANCELLED` and
+`SEQUENCE` + 1, so the server sends the attendees a cancellation. The event
+stays in the calendar, struck through and dimmed, as do events their
+organizer cancelled. With attendees bcal asks first ("Absage an N Teilnehmer
+senden?", Esc keeps the event as it is); without, it cancels right away. A
+series asks for this one, this and the following (the series splits there,
+like an edit), or all. `c` on a cancelled event lifts it (`STATUS:CONFIRMED`,
+attendees get an update), `u` takes either back.
 
 ## Opening .ics files
 

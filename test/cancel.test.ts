@@ -50,10 +50,7 @@ async function load(files: Record<string, string>) {
     vdir
       .events(week)
       .sort((a, b) => a.start.localeCompare(b.start))
-      .map(
-        (e) =>
-          `${new Date(e.start).getDate()}. ${e.title}${e.cancelled ? ` [${e.cancelled}]` : ''}`,
-      )
+      .map((e) => `${new Date(e.start).getDate()}. ${e.title}${e.cancelled ? ' [cancelled]' : ''}`)
   return { root, vdir, list }
 }
 
@@ -69,28 +66,11 @@ describe('cancelEvent on a single event', () => {
     expect(v?.getAllProperties('attendee')).toHaveLength(1)
   })
 
-  it('quiet: only X-BCAL-CANCELLED, no STATUS, SEQUENCE or DTSTAMP change', () => {
-    const { ics } = cancelEvent(single, lunch, 'all', 'quiet', { organizer: me, now })
-    const [v] = vevents(ics)
-    expect(v?.getFirstPropertyValue('status')).toBeNull()
-    expect(v?.getFirstPropertyValue('sequence')).toBe(2)
-    expect(String(v?.getFirstPropertyValue('dtstamp'))).toBe('2026-10-01T00:00:00Z')
-    expect(v?.getFirstPropertyValue('x-bcal-cancelled')).toBe('ALL')
-  })
-
   it('lifts a notified cancellation with STATUS:CONFIRMED and another SEQUENCE', () => {
     const cancelled = cancelEvent(single, lunch, 'all', 'notify', { organizer: me, now }).ics
     const [v] = vevents(cancelEvent(cancelled, lunch, 'all', 'lift', { organizer: me, now }).ics)
     expect(v?.getFirstPropertyValue('status')).toBe('CONFIRMED')
     expect(v?.getFirstPropertyValue('sequence')).toBe(4)
-  })
-
-  it('lifts a quiet cancellation quietly', () => {
-    const cancelled = cancelEvent(single, lunch, 'all', 'quiet', { organizer: me, now }).ics
-    const [v] = vevents(cancelEvent(cancelled, lunch, 'all', 'lift', { organizer: me, now }).ics)
-    expect(v?.hasProperty('x-bcal-cancelled')).toBe(false)
-    expect(v?.getFirstPropertyValue('status')).toBeNull()
-    expect(v?.getFirstPropertyValue('sequence')).toBe(2)
   })
 
   it('refuses events organized by someone else', () => {
@@ -111,7 +91,7 @@ describe('cancelling in a series', () => {
     expect(list()).toEqual([
       '26. Standup',
       '28. Standup (verschoben)',
-      '29. Standup [notified]',
+      '29. Standup [cancelled]',
       '30. Standup',
     ])
     const override = vevents(result.ics).find(
@@ -127,13 +107,13 @@ describe('cancelling in a series', () => {
       now,
     })
     expect((await load({ 's.ics': moved.ics })).list()).toContain(
-      '28. Standup (verschoben) [notified]',
+      '28. Standup (verschoben) [cancelled]',
     )
     const all = cancelEvent(ics, ref('2026-10-29T09:30:00'), 'all', 'notify', {
       organizer: me,
       now,
     })
-    expect((await load({ 's.ics': all.ics })).list().every((e) => e.endsWith('[notified]'))).toBe(
+    expect((await load({ 's.ics': all.ics })).list().every((e) => e.endsWith('[cancelled]'))).toBe(
       true,
     )
   })
@@ -149,40 +129,10 @@ describe('cancelling in a series', () => {
     const { list } = await load({ 'standup.ics': result.ics, 'b.ics': result.split?.ics ?? '' })
     expect(list()).toEqual([
       '26. Standup',
-      '28. Standup (verschoben) [notified]',
-      '29. Standup [notified]',
-      '30. Standup [notified]',
+      '28. Standup (verschoben) [cancelled]',
+      '29. Standup [cancelled]',
+      '30. Standup [cancelled]',
     ])
-  })
-
-  it('marks quiet cancellations on the series without new components', async () => {
-    const ics = await readFile(fixture, 'utf8')
-    const options = { organizer: me, now }
-    const one = cancelEvent(ics, ref('2026-10-29T09:30:00'), 'this', 'quiet', options).ics
-    expect(vevents(one)).toHaveLength(vevents(ics).length)
-    expect((await load({ 's.ics': one })).list()).toEqual([
-      '26. Standup',
-      '28. Standup (verschoben)',
-      '29. Standup [quiet]',
-      '30. Standup',
-    ])
-    const following = cancelEvent(ics, ref('2026-10-28T09:30:00'), 'following', 'quiet', options)
-    expect(following.split).toBeUndefined()
-    expect((await load({ 's.ics': following.ics })).list()).toEqual([
-      '26. Standup',
-      '28. Standup (verschoben) [quiet]',
-      '29. Standup [quiet]',
-      '30. Standup [quiet]',
-    ])
-    // lifting one of them
-    const lifted = cancelEvent(
-      following.ics,
-      ref('2026-10-28T09:30:00'),
-      'following',
-      'lift',
-      options,
-    )
-    expect((await load({ 's.ics': lifted.ics })).list().some((e) => e.includes('['))).toBe(false)
   })
 })
 
@@ -193,7 +143,7 @@ describe('Vdir.cancel', () => {
       organizer: me,
       now,
     })
-    expect(list()).toEqual(['28. Lunch [notified]'])
+    expect(list()).toEqual(['28. Lunch [cancelled]'])
     expect(await readFile(join(root, 'acc/work/lunch.ics'), 'utf8')).toContain('STATUS:CANCELLED')
     expect(await vdir.undo()).toBe('Absage')
     expect(list()).toEqual(['28. Lunch'])
@@ -209,11 +159,11 @@ describe('Vdir.cancel', () => {
     expect(list().some((e) => e.includes('['))).toBe(false)
   })
 
-  it('shows events cancelled by their organizer as notified', async () => {
+  it('shows events cancelled by their organizer struck through', async () => {
     const theirs = single
       .replace('ORGANIZER:mailto:arthur@example.org', 'ORGANIZER:mailto:sam@example.org')
       .replace('SUMMARY:Lunch', 'STATUS:CANCELLED\nSUMMARY:Lunch')
     const { list } = await load({ 'theirs.ics': theirs })
-    expect(list()).toEqual(['28. Lunch [notified]'])
+    expect(list()).toEqual(['28. Lunch [cancelled]'])
   })
 })

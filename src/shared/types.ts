@@ -37,11 +37,8 @@ export interface CalendarEvent {
   /** GEO of the event, for the map */
   geo?: Geo
   status?: string
-  /**
-   * `notified`: STATUS:CANCELLED, the attendees were told (also when someone
-   * else cancelled); `quiet`: struck through only here (X-BCAL-CANCELLED)
-   */
-  cancelled?: 'notified' | 'quiet'
+  /** STATUS:CANCELLED: kept in the calendar, struck through */
+  cancelled?: boolean
   organizer?: Attendee
   attendees: Attendee[]
   /** http(s) links from URL, LOCATION and DESCRIPTION, meeting links first */
@@ -175,8 +172,8 @@ export interface EventRef {
   recurrenceId?: string
 }
 
-/** Cancel and tell the attendees, only strike through here, or take a cancellation back. */
-export type CancelMode = 'notify' | 'quiet' | 'lift'
+/** Cancel and tell the attendees, or take a cancellation back. */
+export type CancelMode = 'notify' | 'lift'
 
 /** For a series: only this occurrence, the whole series, or this and the following. */
 export type Scope = 'this' | 'all' | 'following'

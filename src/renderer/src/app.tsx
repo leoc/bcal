@@ -500,10 +500,8 @@ function Calendar({
             mode,
           )
           setCanUndo(true)
-          const told =
-            others && mode !== 'quiet' && !(mode === 'lift' && event.cancelled === 'quiet')
           setToast(
-            `${mode === 'lift' ? 'Absage zurückgenommen' : 'Abgesagt'}${told ? ` · ${people} informiert` : ''} · u zurücknehmen`,
+            `${mode === 'lift' ? 'Absage zurückgenommen' : 'Abgesagt'}${others ? ` · ${people} informiert` : ''} · u zurücknehmen`,
           )
         } catch (error) {
           setToast(`Absagen fehlgeschlagen: ${reason(error)}`)
@@ -513,33 +511,25 @@ function Calendar({
         withScope(event, { title: `Absage von „${title}“ zurücknehmen` }, act('lift'))
         return
       }
-      const withMode = (mode: CancelMode) =>
+      const cancelWithScope = () =>
         withScope(
           event,
           {
             title: `„${title}“ absagen`,
             destructive: true,
-            note:
-              mode === 'quiet'
-                ? 'Nur durchgestrichen, ohne Nachricht an die Teilnehmer.'
-                : others
-                  ? `${people} bekommen eine Absage.`
-                  : undefined,
+            note: others ? `${people} bekommen eine Absage.` : undefined,
           },
-          act(mode),
+          act('notify'),
         )
       // without attendees STATUS:CANCELLED reaches nobody: no question
-      if (!others) return withMode('notify')
+      if (!others) return cancelWithScope()
       setChoice({
         title: `Absage an ${others} Teilnehmer senden?`,
         note: `„${title}“ bleibt durchgestrichen im Kalender.`,
-        options: [
-          { id: 'notify', label: 'Ja, Absage senden', destructive: true },
-          { id: 'quiet', label: 'Nein, nur durchstreichen' },
-        ],
-        onPick: (id) => {
+        options: [{ id: 'notify', label: 'Absage senden', destructive: true }],
+        onPick: () => {
           setChoice(undefined)
-          withMode(id as CancelMode)
+          cancelWithScope()
         },
         onCancel: () => setChoice(undefined),
       })

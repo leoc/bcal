@@ -38,7 +38,6 @@ import {
   type EditOptions,
   editEvent,
   organizerOf,
-  quietlyCancelled,
   registerTimezones,
 } from './editor'
 import {
@@ -613,13 +612,7 @@ function toEvent(
   const component = item.component
   const url = component.getFirstPropertyValue('url')
   const status = component.getFirstPropertyValue('status')
-  const cancelled =
-    status === 'CANCELLED'
-      ? 'notified'
-      : quietlyCancelled(master.component, recurrenceId?.toString()) ||
-          (component !== master.component && quietlyCancelled(component))
-        ? 'quiet'
-        : undefined
+  const cancelled = status === 'CANCELLED' || undefined
   const rrule = master.component.getFirstPropertyValue('rrule')
   return {
     id: `${calendarId}/${master.uid}/${start.toString()}`,
