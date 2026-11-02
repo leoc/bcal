@@ -1,5 +1,5 @@
-import type { CalendarEvent, Config, EventInput, Person, Place } from '@shared/types'
-import { type Draft, handleFor, localStamp, toNewEvent } from './draft'
+import type { CalendarEvent, Config, EventInput } from '@shared/types'
+import { DRAFT_ID, type Draft, localStamp } from './draft'
 import { toDate } from './format'
 
 const MINUTE = 60_000
@@ -11,86 +11,116 @@ export function isLocked(event: CalendarEvent, config: Config): boolean {
   return Boolean(organizer && organizer !== config.organizer?.email?.toLowerCase())
 }
 
-function pad(n: number): string {
-  return String(n).padStart(2, '0')
+function midnight(date: Date, days = 0): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days)
 }
 
-function duration(minutes: number): string {
-  return minutes % 60 === 0 ? `${minutes / 60}h` : `${minutes}min`
-}
-
-/**
- * An event as a quick-add line, e.g. `29.10.2026 14:00 1h Kaffee in Café
- * Kranzler @SimonMüller`, plus its place and people as if they had been picked,
- * so the full address, GEO and addresses survive the round trip.
- */
-export function editLine(
-  event: CalendarEvent,
+/** New start and end: the times the line names, the rest from the event. */
+function mergedTimes(
+  quick: Draft['quick'],
+  original: CalendarEvent,
   config: Config,
-): { line: string; chosen: Record<string, Person>; places: Record<string, Place> } {
-  const start = toDate(event.start)
-  const end = toDate(event.end)
-  const date = `${start.getDate()}.${start.getMonth() + 1}.${start.getFullYear()}`
-  const when = event.allDay
-    ? [
-        date,
-        ...(end.getTime() - start.getTime() > DAY
-          ? [`${Math.round((end.getTime() - start.getTime()) / DAY) * 24}h`]
-          : []),
-      ]
-    : [
-        date,
-        `${pad(start.getHours())}:${pad(start.getMinutes())}`,
-        duration(Math.round((end.getTime() - start.getTime()) / MINUTE)),
-      ]
+): { start: Date; end: Date; allDay: boolean } {
+  const { given } = quick
+  const oldStart = toDate(original.start)
+  const oldEnd = toDate(original.end)
+  const allDay = given.time ? false : original.allDay
+  const day = given.date ? quick.start : oldStart
+  const clock = given.time ? quick.start : oldStart
 
-  const parts = [...when, event.title]
-  const places: Record<string, Place> = {}
-  const location = event.location?.trim()
-  if (location && !/^https?:\/\//i.test(location)) {
-    const name = location.split(',')[0]?.trim() || location
-    places[name.toLowerCase()] = { name, label: location, geo: event.geo, source: 'events' }
-    // "Essen bei Friedi" names the place already
-    if (!event.title.toLowerCase().includes(`bei ${name.toLowerCase()}`)) parts.push(`in ${name}`)
+  if (allDay) {
+    const start = midnight(day)
+    const days = quick.duration
+      ? Math.max(1, Math.round(quick.duration / (24 * 60)))
+      : Math.max(1, Math.round((midnight(oldEnd).getTime() - midnight(oldStart).getTime()) / DAY))
+    return { start, end: midnight(start, days), allDay }
   }
 
-  const chosen: Record<string, Person> = {}
-  const me = config.organizer?.email?.toLowerCase()
-  for (const attendee of event.attendees) {
-    if (!attendee.email || attendee.email.toLowerCase() === me) continue
-    const person = { name: attendee.name, email: attendee.email }
-    const handle = handleFor(person)
-    chosen[handle.toLowerCase()] = person
-    parts.push(`@${handle}`)
-  }
-  return { line: parts.join(' '), chosen, places }
+  const start = new Date(
+    day.getFullYear(),
+    day.getMonth(),
+    day.getDate(),
+    clock.getHours(),
+    clock.getMinutes(),
+  )
+  const length = given.end
+    ? quick.end.getTime() - quick.start.getTime()
+    : quick.duration
+      ? quick.duration * MINUTE
+      : original.allDay
+        ? config.defaultDuration * MINUTE
+        : oldEnd.getTime() - oldStart.getTime()
+  return { start, end: new Date(start.getTime() + length), allDay }
 }
 
 /**
- * The change a draft makes to `original`: what the line says, while things
- * the line cannot show (meeting link as location, description) stay.
+ * The change an edit line makes to `original`: only what the line names
+ * (date, time, duration or end, title, place, people, calendar, recurrence,
+ * video) is replaced, everything else stays as it was.
  */
-export function toEditInput(
+export function mergeEdit(
   draft: Draft,
   original: CalendarEvent,
   config: Config,
 ): EventInput | undefined {
-  const event = toNewEvent(draft, config)
-  if (!event) return undefined
-  const { alarm: _alarm, ...input } = event
-  const link =
-    original.location && /^https?:\/\//i.test(original.location) ? original.location : undefined
-  const location = draft.quick.location
-    ? input.location
-    : (link ?? (draft.video && !original.links.length ? draft.video : undefined))
-  const video = draft.video && !original.links.length ? `Video: ${draft.video}` : undefined
+  if (!draft.calendar) return undefined
+  const { quick } = draft
+  const times = mergedTimes(quick, original, config)
+  const video = draft.video && !original.links.length ? draft.video : undefined
+  const location = quick.location
+    ? (draft.place?.label ?? quick.location)
+    : (original.location ?? video)
+  const people = quick.people.length
+    ? draft.people.flatMap((p) => (p.person?.email ? [p.person] : []))
+    : original.attendees.filter((a) => a.email && a.email.toLowerCase() !== me(config))
   return {
-    ...input,
+    calendarId: draft.calendar.id,
+    title: quick.title || original.title,
+    start: localStamp(times.start, times.allDay),
+    end: localStamp(times.end, times.allDay),
+    allDay: times.allDay,
     location,
-    geo: draft.quick.location ? input.geo : undefined,
-    description: [original.description, video].filter(Boolean).join('\n\n') || undefined,
-    attendees: input.attendees.filter((a) => a.email),
+    geo: quick.location ? draft.place?.geo : original.geo,
+    description:
+      [original.description, video && `Video: ${video}`].filter(Boolean).join('\n\n') || undefined,
+    // the writer keeps the recurrence unless one is given
+    rrule: quick.rrule,
+    attendees: people.map(({ name, email }) => ({ name, email })),
   }
+}
+
+/** The edited event as it will look, for the details panel and the grid. */
+export function editPreview(
+  draft: Draft,
+  original: CalendarEvent,
+  config: Config,
+): CalendarEvent | undefined {
+  const input = mergeEdit(draft, original, config)
+  if (!input) return undefined
+  const status = new Map(original.attendees.map((a) => [a.email?.toLowerCase(), a]))
+  const video = draft.video && !original.links.length ? draft.video : undefined
+  return {
+    ...original,
+    id: DRAFT_ID,
+    calendarId: input.calendarId,
+    title: input.title,
+    start: input.allDay ? input.start : new Date(input.start).toISOString(),
+    end: input.allDay ? input.end : new Date(input.end).toISOString(),
+    allDay: input.allDay,
+    location: input.location,
+    geo: input.geo,
+    description: input.description,
+    rrule: input.rrule ?? original.rrule,
+    attendees: [
+      ...original.attendees.filter((a) => a.email?.toLowerCase() === me(config)),
+      ...input.attendees.map((a) => status.get(a.email?.toLowerCase()) ?? a),
+    ],
+    links: video ? [...original.links, video] : original.links,
+  }
+}
+
+function me(config: Config): string | undefined {
+  return config.organizer?.email?.toLowerCase()
 }
 
 /** The event with new times, e.g. after dragging it. */

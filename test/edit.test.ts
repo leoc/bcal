@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildDraft } from '../src/renderer/src/lib/draft'
-import { editLine, isLocked, movedInput, toEditInput } from '../src/renderer/src/lib/edit'
+import { editPreview, isLocked, mergeEdit, movedInput } from '../src/renderer/src/lib/edit'
 import type { CalendarEvent, CalendarInfo, Config } from '../src/shared/types'
 
 const cal = (id: string, name: string): CalendarInfo => ({
@@ -46,10 +46,9 @@ const event = (changes: Partial<CalendarEvent> = {}): CalendarEvent => ({
   ...changes,
 })
 
-/** Line from the event, edited by `change`, back to an EventInput. */
-function roundTrip(original: CalendarEvent, change: (line: string) => string = (l) => l) {
-  const { line, chosen, places } = editLine(original, config)
-  const draft = buildDraft(change(line), {
+/** The edit line `line` applied to `original`. */
+function edit(original: CalendarEvent, line: string, chosen = {}, places = {}) {
+  const draft = buildDraft(line, {
     calendars,
     config,
     chosen,
@@ -58,37 +57,17 @@ function roundTrip(original: CalendarEvent, change: (line: string) => string = (
     videoCode: 'abc',
     now,
   })
-  return { line, input: toEditInput(draft, original, config) }
+  return {
+    input: mergeEdit(draft, original, config),
+    preview: editPreview(draft, original, config),
+  }
 }
 
-describe('editLine', () => {
-  it('writes date, time, duration, title, place and people', () => {
-    expect(editLine(event(), config).line).toBe(
-      '29.10.2026 14:00 90min Kaffee in Café Kranzler @SimonMüller',
-    )
-    expect(editLine(event({ title: 'Essen bei Café Kranzler' }), config).line).toBe(
-      '29.10.2026 14:00 90min Essen bei Café Kranzler @SimonMüller',
-    )
-    expect(
-      editLine(
-        event({
-          allDay: true,
-          start: '2026-12-03',
-          end: '2026-12-06',
-          location: undefined,
-          attendees: [],
-        }),
-        config,
-      ).line,
-    ).toBe('3.12.2026 72h Kaffee')
-  })
-})
-
-describe('round trip', () => {
-  it('gives the event back unchanged', () => {
-    expect(roundTrip(event()).input).toEqual({
+describe('mergeEdit', () => {
+  it('keeps everything the line does not name', () => {
+    expect(edit(event(), 'Kaffee und Kuchen').input).toEqual({
       calendarId: 'acc/family',
-      title: 'Kaffee',
+      title: 'Kaffee und Kuchen',
       start: '2026-10-29T14:00:00',
       end: '2026-10-29T15:30:00',
       allDay: false,
@@ -100,45 +79,99 @@ describe('round trip', () => {
     })
   })
 
-  it('keeps hosts, past dates and multi-day events', () => {
-    expect(roundTrip(event({ title: 'Essen bei Café Kranzler' })).input).toMatchObject({
-      title: 'Essen bei Café Kranzler',
-      location: 'Café Kranzler, Kurfürstendamm 18, 10719 Berlin',
+  it('moves the time, the day, or both, keeping the length', () => {
+    expect(edit(event(), '16 Uhr').input).toMatchObject({
+      title: 'Kaffee',
+      start: '2026-10-29T16:00:00',
+      end: '2026-10-29T17:30:00',
     })
-    const past = event({
-      start: new Date(2025, 2, 3, 9).toISOString(),
-      end: new Date(2025, 2, 3, 10).toISOString(),
+    expect(edit(event(), '3.11.').input).toMatchObject({
+      start: '2026-11-03T14:00:00',
+      end: '2026-11-03T15:30:00',
+      allDay: false,
     })
-    expect(roundTrip(past).input).toMatchObject({ start: '2025-03-03T09:00:00' })
-    const trip = event({ allDay: true, start: '2026-12-03', end: '2026-12-06', attendees: [] })
-    expect(roundTrip(trip).input).toMatchObject({
-      start: '2026-12-03',
-      end: '2026-12-06',
-      allDay: true,
+    expect(edit(event(), 'freitag 9 Uhr').input).toMatchObject({
+      start: '2026-10-30T09:00:00',
+      end: '2026-10-30T10:30:00',
     })
   })
 
-  it('applies what the line changes and keeps a meeting link', () => {
+  it('changes the length by duration or end time', () => {
+    expect(edit(event(), '2h').input).toMatchObject({
+      start: '2026-10-29T14:00:00',
+      end: '2026-10-29T16:00:00',
+    })
+    expect(edit(event(), '10-11:15').input).toMatchObject({
+      start: '2026-10-29T10:00:00',
+      end: '2026-10-29T11:15:00',
+    })
+  })
+
+  it('keeps all-day events all-day unless a time is given', () => {
+    const trip = event({ allDay: true, start: '2026-12-03', end: '2026-12-06', attendees: [] })
+    expect(edit(trip, '10.12.').input).toMatchObject({
+      start: '2026-12-10',
+      end: '2026-12-13',
+      allDay: true,
+    })
+    expect(edit(trip, '15 Uhr').input).toMatchObject({
+      start: '2026-12-03T15:00:00',
+      end: '2026-12-03T16:00:00',
+      allDay: false,
+    })
+  })
+
+  it('replaces place, people and calendar when named', () => {
+    const tim = { name: 'Tim', email: 'tim@example.org' }
+    const { input } = edit(event({ calendarId: 'acc/personal' }), 'in Büro @Tim #family', {
+      tim,
+    })
+    expect(input).toMatchObject({
+      title: 'Kaffee',
+      location: 'Büro',
+      geo: undefined,
+      calendarId: 'acc/family',
+      attendees: [tim],
+    })
+  })
+
+  it('takes a new recurrence, else leaves it to the writer', () => {
+    expect(edit(event(), 'jeden Donnerstag').input?.rrule).toBe('FREQ=WEEKLY;BYDAY=TH')
+    expect(edit(event({ rrule: 'FREQ=DAILY' }), '16 Uhr').input?.rrule).toBeUndefined()
+  })
+
+  it('adds a meeting room, but keeps an existing link', () => {
+    expect(edit(event({ location: undefined, geo: undefined }), 'video').input).toMatchObject({
+      title: 'Kaffee',
+      location: 'https://meet.example.org/abc',
+      description: 'Bitte pünktlich\n\nVideo: https://meet.example.org/abc',
+    })
     const call = event({
       location: 'https://meet.example.org/x',
       geo: undefined,
       links: ['https://meet.example.org/x'],
     })
-    const { line, input } = roundTrip(call, (l) =>
-      l.replace('14:00', '16:00').replace('Kaffee', 'Kaffee und Kuchen'),
-    )
-    expect(line).toBe('29.10.2026 14:00 90min Kaffee @SimonMüller')
-    expect(input).toMatchObject({
-      title: 'Kaffee und Kuchen',
-      start: '2026-10-29T16:00:00',
-      end: '2026-10-29T17:30:00',
+    expect(edit(call, 'video 16 Uhr').input).toMatchObject({
       location: 'https://meet.example.org/x',
+      description: 'Bitte pünktlich',
     })
-    expect(roundTrip(event(), (l) => l.replace(' @SimonMüller', '')).input?.attendees).toEqual([])
-    expect(roundTrip(event(), (l) => `${l} #family`).input?.calendarId).toBe('acc/family')
-    expect(
-      roundTrip(event({ calendarId: 'acc/personal' }), (l) => `${l} #family`).input?.calendarId,
-    ).toBe('acc/family')
+  })
+})
+
+describe('editPreview', () => {
+  it('shows the merged event with the old answers and the series', () => {
+    const { preview } = edit(event({ rrule: 'FREQ=WEEKLY;BYDAY=TH' }), '16 Uhr')
+    expect(preview).toMatchObject({
+      id: 'bcal-draft',
+      uid: 'k@bcal',
+      title: 'Kaffee',
+      start: new Date(2026, 9, 29, 16).toISOString(),
+      rrule: 'FREQ=WEEKLY;BYDAY=TH',
+      attendees: [
+        { name: 'Arthur', email: 'arthur@example.org', status: 'ACCEPTED' },
+        { name: 'Simon Müller', email: 'simon@example.org', status: 'ACCEPTED' },
+      ],
+    })
   })
 })
 

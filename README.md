@@ -39,7 +39,7 @@ Nextcloud (CalDAV) <-> pimsync (HM service) <-> ~/.calendar/<account>/<collectio
 | `g`                  | go to date (`fr`, `12.11.`, `kw 45`, `+3`, `nächsten Freitag`)     |
 | `Ctrl+K`             | palette: new event, commands (`>`), search (`/`)                   |
 | `n`                  | new event from one line (see below)                                |
-| `e`                  | edit the focused event as a line, or reopen the draft              |
+| `e`                  | change the focused event: type only what changes, or reopen draft  |
 | `Shift+Enter`        | save the draft (also right from the palette)                       |
 | `D`, `Delete`        | delete the focused event (asks first)                              |
 | `u`                  | take back the last write (new, changed or deleted event)           |
@@ -87,11 +87,24 @@ it. `u` moves the event just created to `~/_nobackup/_deletable/bcal/`.
 
 ## Changing events
 
-`e` on the focused event opens it as a line, e.g. `29.10.2026 14:00 90min
-Kaffee in Café Kranzler @SimonMüller`; its place and people count as picked, so
-the full address, `GEO` and invitations survive. Change what you like (`#family`
-moves it to another calendar) and save with `Shift+Enter`. Dragging or resizing
-an event in the calendar changes its time the same way.
+`e` on the focused event opens an empty line in the same syntax as `n`. What
+you type replaces only those parts of the event, the rest stays:
+
+```
+16 Uhr          same day and length, starts at 16:00
+fr              same time, moved to Friday
+2h              same start, two hours long
+10-11:15        new start and end on the same day
+in Büro         new place
+@Tim            Tim instead of the current attendees
+#family         moved to another calendar
+Kaffee und Kuchen 16 Uhr   new title and time
+```
+
+The panel on the right previews the changed event; `Shift+Enter` saves it and
+the attendees get an update from the server. All-day events stay all-day unless
+the line names a time. Dragging or resizing an event in the calendar changes
+its time the same way.
 
 For a series bcal asks: only this occurrence (an override with
 `RECURRENCE-ID`), this and the following ones (the series ends before, a new one

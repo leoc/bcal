@@ -32,7 +32,7 @@ import {
   placeAddress,
   toNewEvent,
 } from '@/lib/draft'
-import { editLine, isLocked, movedInput, toEditInput } from '@/lib/edit'
+import { editPreview, isLocked, mergeEdit, movedInput } from '@/lib/edit'
 import { toDate } from '@/lib/format'
 import { type Action, buildBindings, resolve } from '@/lib/keymap'
 
@@ -162,8 +162,13 @@ function Calendar({
   // in the mixed palette only lines that read like an event become a draft
   const lineOpen = palette === 'create' || (palette === 'all' && Boolean(draft?.quick.explicit))
   const draftEvent = useMemo(
-    () => (draft && (draftActive || lineOpen) ? draftAsEvent(draft, config) : undefined),
-    [draft, draftActive, lineOpen, config],
+    () =>
+      draft && (draftActive || lineOpen)
+        ? editing
+          ? editPreview(draft, editing, config)
+          : draftAsEvent(draft, config)
+        : undefined,
+    [draft, draftActive, lineOpen, config, editing],
   )
 
   // move the calendar behind the palette to where the draft lands
@@ -324,7 +329,12 @@ function Calendar({
             setPalette(undefined)
             setCanUndo(true)
             setFocusedId(updated.id)
-            setToast('Geändert · u zurücknehmen')
+            const informed = input.attendees.filter(
+              (a) => a.email && a.email.toLowerCase() !== config.organizer?.email?.toLowerCase(),
+            ).length
+            setToast(
+              `Geändert${informed ? ` · ${informed} ${informed === 1 ? 'Person' : 'Personen'} informiert` : ''} · u zurücknehmen`,
+            )
           } catch (error) {
             revert?.()
             setToast(`Ändern fehlgeschlagen: ${reason(error)}`)
@@ -332,13 +342,13 @@ function Calendar({
         },
         revert,
       ),
-    [withScope, incognito, byId, visible, toggle, discardDraft],
+    [withScope, incognito, byId, visible, toggle, discardDraft, config],
   )
 
   const save = useCallback(async () => {
     if (!draft) return
     if (editing) {
-      const input = toEditInput(draft, editing, config)
+      const input = mergeEdit(draft, editing, config)
       if (input) update(editing, input)
       return
     }
@@ -363,7 +373,7 @@ function Calendar({
     }
   }, [draft, editing, update, config, byId, visible, toggle, discardDraft, controller])
 
-  /** `e`: the focused event becomes the line, as if typed. */
+  /** `e`: an empty line; what is typed there replaces those parts of the focused event. */
   const startEdit = useCallback(
     (event: CalendarEvent) => {
       if (isLocked(event, config)) {
@@ -372,11 +382,10 @@ function Calendar({
         )
         return
       }
-      const { line: next, chosen: people, places } = editLine(event, config)
       setEditing(event)
-      setLine(next)
-      setChosen(people)
-      setChosenPlaces(places)
+      setLine('')
+      setChosen({})
+      setChosenPlaces({})
       setDraftActive(false)
       setPalette('create')
     },

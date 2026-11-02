@@ -17,6 +17,10 @@ export interface QuickAdd {
   explicit: boolean
   /** `video`, `call` or `jitsi` was given */
   video: boolean
+  /** which parts the line names itself, rather than filled in by default */
+  given: { date: boolean; time: boolean; end: boolean }
+  /** minutes, when the line names a duration (`1h`, `90min`) */
+  duration?: number
 }
 
 export interface QuickAddOptions {
@@ -357,6 +361,7 @@ export function parseQuickAdd(input: string, options: QuickAddOptions = {}): Qui
     if (end) end = new Date(end.getTime() + shift)
   }
 
+  const given = { date: hasDate, time: hasTime, end: hasTime && Boolean(end) }
   let allDay = false
   if (!start) {
     start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -392,5 +397,18 @@ export function parseQuickAdd(input: string, options: QuickAddOptions = {}): Qui
 
   const explicit =
     used.length > 0 || people.length > 0 || calendar !== undefined || rrule !== undefined
-  return { title, start, end, allDay, people, calendar, location, rrule, video, explicit }
+  return {
+    title,
+    start,
+    end,
+    allDay,
+    people,
+    calendar,
+    location,
+    rrule,
+    video,
+    explicit,
+    given,
+    duration,
+  }
 }

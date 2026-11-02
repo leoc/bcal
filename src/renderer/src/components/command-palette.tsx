@@ -274,7 +274,11 @@ export function CommandPalette(props: Props) {
             }}
             onSelect={(e) => setCursor(e.currentTarget.selectionStart ?? 0)}
             onKeyDown={onKeyDown}
-            placeholder={placeholders[mode]}
+            placeholder={
+              editing && mode === 'create'
+                ? 'nur was sich ändert: 16 Uhr, 2h, fr, in Büro, @Simon, #family'
+                : placeholders[mode]
+            }
             spellCheck={false}
             className="h-12 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
