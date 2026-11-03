@@ -57,6 +57,18 @@ keymap: { n: next, h: none }
     expect(normalize({ video: 'javascript:alert(1)' }).video).toBeUndefined()
   })
 
+  it('reads the link command as a line or a list', () => {
+    expect(normalize({ openLink: ' firefox  --new-window ' }).openLink).toEqual([
+      'firefox',
+      '--new-window',
+    ])
+    expect(normalize({ openLink: ['browser', '--app={url}'] }).openLink).toEqual([
+      'browser',
+      '--app={url}',
+    ])
+    expect(normalize({ openLink: '' }).openLink).toBeUndefined()
+  })
+
   it('reads own places and the map center', () => {
     const config = normalize(
       parse(`

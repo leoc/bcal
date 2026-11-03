@@ -93,9 +93,13 @@ places: []
 # Map searches prefer places near this point.
 near: [52.52, 13.405]
 
+# Links (o, O): this command opens them, the URL replaces {url} or is
+# appended. Without it the system browser opens them.
+# openLink: firefox --new-window
+
 # Key overrides: <key>: <action>. Actions: prev, next, today, view:week,
 # view:month, view:day, view:list, focus:next, focus:prev, details, open-link,
-# goto, search, toggle:sidebar, incognito, groups:all, group:<n> (0-based),
+# links, goto, search, toggle:sidebar, incognito, groups:all, group:<n> (0-based),
 # help, close, none (unbind).
 keymap: {}
 `
@@ -150,7 +154,18 @@ export function normalize(raw: unknown): Config {
         : defaultConfig.zoom,
     panels: panels(data.panels),
     sync: sync(data.sync),
+    openLink: command(data.openLink),
   }
+}
+
+/** `firefox --new-window` or `[firefox, --new-window]` */
+function command(value: unknown): string[] | undefined {
+  const argv = Array.isArray(value)
+    ? value.filter((v) => typeof v === 'string' && v.trim())
+    : typeof value === 'string'
+      ? value.trim().split(/\s+/).filter(Boolean)
+      : []
+  return argv.length ? argv : undefined
 }
 
 /** `[52.5, 13.4]`, `{ lat, lon }` or `"52.5, 13.4"` */

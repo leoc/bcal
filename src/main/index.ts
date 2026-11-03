@@ -1,7 +1,18 @@
+import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, shell, Tray } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  ipcMain,
+  Menu,
+  nativeImage,
+  nativeTheme,
+  shell,
+  Tray,
+} from 'electron'
 import type { PanelState } from '../shared/panels'
 import type {
   CancelMode,
@@ -15,6 +26,7 @@ import type {
   Scope,
 } from '../shared/types'
 import { loadConfig, watchConfig, writeConfigValue } from './config'
+import { linkCommand } from './links'
 import { filesIn, readOpened } from './opened'
 import { type Candidate, mergePeople, parseVcards, rankPeople, readVcards } from './people'
 import { eventPlaces, Photon, type PlaceCandidate, parseVcardPlaces, rankPlaces } from './places'
@@ -274,8 +286,16 @@ app.whenReady().then(async () => {
       : { running: false, ok: false, error: 'Sync im Screenshot-Modus aus' },
   )
   ipcMain.handle('shell:open', (_event, url: string) => {
-    if (/^https?:\/\//.test(url)) return shell.openExternal(url)
+    if (!/^https?:\/\//.test(url)) return
+    const argv = config.openLink && linkCommand(config.openLink, url)
+    if (!argv) return shell.openExternal(url)
+    const [bin = '', ...args] = argv
+    const child = spawn(bin, args, { detached: true, stdio: 'ignore' })
+    // a missing binary must not leave the link unopened
+    child.on('error', () => shell.openExternal(url))
+    child.unref()
   })
+  ipcMain.handle('clipboard:write', (_event, text: string) => clipboard.writeText(text))
   ipcMain.on('window:close', () => window?.close())
   ipcMain.on('app:hide', () => window?.hide())
   ipcMain.on('app:quit', quit)

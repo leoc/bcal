@@ -10,6 +10,7 @@ export type Action =
   | 'focus:prev'
   | 'details'
   | 'open-link'
+  | 'links'
   | 'goto'
   | 'search'
   | 'toggle:sidebar'
@@ -47,7 +48,8 @@ const descriptions: Record<string, string> = {
   'focus:next': 'Nächster Termin',
   'focus:prev': 'Vorheriger Termin',
   details: 'Details ein/aus',
-  'open-link': 'Link öffnen',
+  'open-link': 'Link öffnen (bei mehreren: Auswahl)',
+  links: 'Links: öffnen oder kopieren',
   goto: 'Datum springen',
   search: 'Suchen',
   'toggle:sidebar': 'Seitenleiste',
@@ -85,6 +87,7 @@ const defaults: [string, Action][] = [
   ['Enter', 'details'],
   ['i', 'details'],
   ['o', 'open-link'],
+  ['O', 'links'],
   ['g', 'goto'],
   ['/', 'search'],
   ['b', 'toggle:sidebar'],

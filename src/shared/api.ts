@@ -69,6 +69,8 @@ export interface Api {
   quit: () => void
   /** commands from outside the page, e.g. the tray's "new" */
   onCommand: (listener: (action: string) => void) => () => void
-  /** opens an http(s) link in the default browser */
+  /** opens an http(s) link with `openLink` from config.yml, else the default browser */
   openLink: (url: string) => Promise<void>
+  /** puts text on the clipboard */
+  copyText: (text: string) => Promise<void>
 }

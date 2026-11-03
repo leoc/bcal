@@ -34,7 +34,8 @@ Nextcloud (CalDAV) <-> pimsync (HM service) <-> ~/.calendar/<account>/<collectio
 | `w` `m` `d` `a`      | week, month, day, agenda                                           |
 | `j` / `k`, `↓` / `↑` | next / previous event                                              |
 | `Enter`, `i`         | toggle details panel (off at first start, then remembered)         |
-| `o`                  | open the event's first link                                        |
+| `o`                  | open the event's link; with several: choose one                    |
+| `O`                  | all links of the event: open in the browser or copy, by number     |
 | `Esc`                | clear focus / close                                                |
 | `g`                  | go to date (`fr`, `12.11.`, `kw 45`, `+3`, `nächsten Freitag`)     |
 | `Ctrl+K`             | palette: new event, commands (`>`), search (`/`)                   |
@@ -161,7 +162,9 @@ order assigns the keys 1–9; `toggle: true` makes a group an add-on that its
 key switches on and off), calendars hidden by default, defaults for new events
 (calendar, duration, alarm, `organizer`, `video` room URL), own places
 (`places:` with `name`, optional `address` and `geo: [lat, lon]`), the point map
-searches prefer (`near:`, default Berlin), and key overrides
+searches prefer (`near:`, default Berlin), the command that opens links
+(`openLink: firefox --new-window`, the URL replaces `{url}` or is appended;
+the system browser without it), and key overrides
 (`<key>: <action>`, `none` unbinds). Toggles in the app win over `hidden` and
 are kept per machine. Chromium state lives in `~/.local/state/bcal`.
 

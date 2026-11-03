@@ -6,6 +6,8 @@ export interface ChoiceOption {
   id: string
   label: string
   hint?: string
+  /** a second, muted line, e.g. the link an entry acts on */
+  detail?: string
   /** red, for deleting */
   destructive?: boolean
 }
@@ -56,7 +58,14 @@ export function Choice({ title, note, options, onPick, onCancel }: Props) {
                 <kbd className="flex h-5 min-w-5 items-center justify-center rounded border bg-muted px-1 font-mono text-[10px] text-muted-foreground">
                   {index + 1}
                 </kbd>
-                <span className="flex-1">{option.label}</span>
+                <span className="min-w-0 flex-1">
+                  {option.label}
+                  {option.detail && (
+                    <span className="block truncate font-mono text-[11px] text-muted-foreground">
+                      {option.detail}
+                    </span>
+                  )}
+                </span>
                 {option.hint && (
                   <span className="text-xs text-muted-foreground">{option.hint}</span>
                 )}

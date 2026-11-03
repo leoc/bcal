@@ -38,6 +38,7 @@ import {
 import { editPreview, isLocked, mergeEdit, movedInput } from '@/lib/edit'
 import { toDate } from '@/lib/format'
 import { type Action, buildBindings, resolve } from '@/lib/keymap'
+import { linkName } from '@/lib/links'
 
 const viewTypes: Record<ViewName, string> = {
   week: 'timeGridWeek',
@@ -537,6 +538,37 @@ function Calendar({
     [incognito, config, withScope],
   )
 
+  // several Teams links in one invitation: show them all, open or copy each
+  const chooseLink = useCallback((links: string[]) => {
+    // the same service twice gets numbers: Teams 1, Teams 2
+    const names = links.map(linkName)
+    const labels = names.map((name, i) =>
+      names.filter((n) => n === name).length > 1
+        ? `${name} ${names.slice(0, i + 1).filter((n) => n === name).length}`
+        : name,
+    )
+    const options = links.flatMap((url, i) => [
+      { id: `open:${i}`, label: 'Im Browser öffnen', hint: labels[i], detail: url },
+      { id: `copy:${i}`, label: 'Link kopieren', hint: labels[i], detail: url },
+    ])
+    setChoice({
+      title: links.length > 1 ? `${links.length} Links` : 'Link',
+      options,
+      onPick: (id) => {
+        setChoice(undefined)
+        const [what, index] = id.split(':')
+        const url = links[Number(index)]
+        if (!url) return
+        if (what === 'open') window.api.openLink(url)
+        else
+          window.api
+            .copyText(url)
+            .then(() => setToast(`Kopiert: ${url}`))
+            .catch((error) => setToast(`Kopieren fehlgeschlagen: ${error}`))
+      },
+    })
+  }, [])
+
   const undo = useCallback(async () => {
     try {
       const undone = await window.api.undo()
@@ -629,8 +661,13 @@ function Calendar({
       else if (action === 'focus:prev') moveFocus(-1)
       else if (action === 'details') togglePanel('details')
       else if (action === 'open-link') {
-        const link = (draftEvent ?? focused)?.links[0]
-        if (link) window.api.openLink(link)
+        const links = (draftEvent ?? focused)?.links ?? []
+        const [only] = links
+        if (links.length === 1 && only) window.api.openLink(only)
+        else if (links.length) chooseLink(links)
+      } else if (action === 'links') {
+        const links = (draftEvent ?? focused)?.links ?? []
+        if (links.length) chooseLink(links)
       } else if (action === 'palette') setPalette('all')
       else if (action === 'new') {
         // a fresh line, unless a draft waits for more
@@ -665,6 +702,7 @@ function Calendar({
     [
       controller,
       moveFocus,
+      chooseLink,
       draftEvent,
       focused,
       draftActive,
@@ -717,6 +755,9 @@ function Calendar({
       ...(focused && !draftActive
         ? ([
             ['edit-draft', 'Termin bearbeiten'],
+            ...(focused.links.length
+              ? ([['links', 'Links öffnen oder kopieren']] as [Action, string][])
+              : []),
             ['cancel', focused.cancelled ? 'Absage zurücknehmen' : 'Termin absagen'],
             ['delete', 'Termin löschen'],
           ] as [Action, string][])

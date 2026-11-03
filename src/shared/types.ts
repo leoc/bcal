@@ -89,6 +89,8 @@ export interface Config {
   panels: PanelModes
   /** pimsync runs from the app */
   sync: SyncSettings
+  /** command that opens links, `{url}` or appended; the system browser when unset */
+  openLink?: string[]
 }
 
 export interface SyncSettings {

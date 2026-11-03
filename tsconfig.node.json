@@ -26,6 +26,7 @@
     "src/renderer/src/lib/draft.ts",
     "src/renderer/src/lib/edit.ts",
     "src/renderer/src/lib/month.ts",
+    "src/renderer/src/lib/links.ts",
     "test/**/*",
     "electron.vite.config.ts",
     "vitest.config.mts"

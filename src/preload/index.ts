@@ -39,6 +39,7 @@ const api: Api = {
   onChange: (listener) => subscribe('vdir:changed', listener),
   onConfigChange: (listener) => subscribe('config:changed', listener),
   openLink: (url) => ipcRenderer.invoke('shell:open', url),
+  copyText: (text) => ipcRenderer.invoke('clipboard:write', text),
   hide: () => ipcRenderer.send('app:hide'),
   quit: () => ipcRenderer.send('app:quit'),
   onCommand: (listener) => {
