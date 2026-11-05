@@ -16,11 +16,11 @@ const months = [
   'dezember',
 ]
 
-function startOfDay(date: Date): Date {
+export function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate())
 }
 
-function addDays(date: Date, days: number): Date {
+export function addDays(date: Date, days: number): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days)
 }
 

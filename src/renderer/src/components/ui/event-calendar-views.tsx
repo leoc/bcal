@@ -1,5 +1,6 @@
 import FullCalendar, { type CalendarOptions, type DayCellInfo } from '@fullcalendar/react'
 import '@fullcalendar/react/skeleton.css'
+import { sameDay } from '@/lib/navigate'
 import { cn } from '@/lib/utils'
 
 const xxsTextClass = 'text-[0.6875rem]/[1.090909]'
@@ -71,12 +72,15 @@ const dayRowCommonClasses: CalendarOptions = {
 
 export type EventCalendarViewProps =
   CalendarOptions &
-  Required<Pick<CalendarOptions, 'popoverCloseContent'>> // ensure callers define icons
+  Required<Pick<CalendarOptions, 'popoverCloseContent'>> & // ensure callers define icons
+  { cursorDay?: Date } // highlighted as the keyboard's day cursor
 
 export function EventCalendarViews({
   views: userViews,
+  cursorDay,
   ...restOptions
 }: EventCalendarViewProps) {
+  const cursorClass = (date: Date) => cursorDay && sameDay(date, cursorDay) && 'bcal-cursor'
   return (
     <FullCalendar
 
@@ -230,6 +234,7 @@ export function EventCalendarViews({
 
       dayHeaderAlign='center'
       dayHeaderClass={(info) => cn(
+        cursorClass(info.date),
         'justify-center',
         info.isMajor && 'border border-foreground/20',
         (info.isDisabled && !info.inPopover) && 'bg-foreground/3',
@@ -264,6 +269,7 @@ export function EventCalendarViews({
       ----------------------------------------------------------------------------------------- */
 
       dayCellClass={(info) => cn(
+        cursorClass(info.date),
         'border',
         info.isMajor && 'border-foreground/20',
         info.isDisabled && 'bg-foreground/3',
@@ -306,6 +312,7 @@ export function EventCalendarViews({
       ----------------------------------------------------------------------------------------- */
 
       dayLaneClass={(info) => cn(
+        cursorClass(info.date),
         'border',
         info.isMajor && 'border-foreground/20',
         info.isDisabled && 'bg-foreground/3',
@@ -327,6 +334,7 @@ export function EventCalendarViews({
       listDayFormat={{ day: 'numeric' }}
       listDayAltFormat={{ month: 'short', weekday: 'short', forceCommas: true }}
       listDayClass={(info) => cn(
+        cursorClass(info.date),
         !info.isLast && 'border-b',
         'flex flex-row items-start',
       )}

@@ -131,6 +131,11 @@
   z-index: 10;
 }
 
+/* day cursor of H/L/J/K */
+.bcal-cursor {
+  background-color: color-mix(in oklab, var(--primary) 12%, transparent);
+}
+
 /* cancelled, kept in the calendar */
 .bcal-cancelled {
   opacity: 0.5;

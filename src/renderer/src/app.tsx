@@ -39,8 +39,10 @@ import {
 } from '@/lib/draft'
 import { editPreview, invitationAnswer, isLocked, mergeEdit, movedInput } from '@/lib/edit'
 import { toDate } from '@/lib/format'
+import { addDays, startOfDay } from '@/lib/goto'
 import { type Action, buildBindings, resolve } from '@/lib/keymap'
 import { linkName } from '@/lib/links'
+import { minutesOf, nearestOnNextDay, sameDay } from '@/lib/navigate'
 
 const viewTypes: Record<ViewName, string> = {
   week: 'timeGridWeek',
@@ -111,8 +113,15 @@ function Calendar({
   // hides titles and details, e.g. for screen sharing; not persisted
   const [incognito, setIncognito] = useState(false)
   const [focusedId, setFocusedId] = useState<string>()
-  // set when j/k ran off the visible range: focus first/last once the next one loaded
-  const [pending, setPending] = useState<{ edge: 'first' | 'last'; from: string }>()
+  // the day H/L/J/K move; follows the focused event
+  const [cursor, setCursor] = useState(() => startOfDay(new Date()))
+  // the time of day h/l aim for: that of the last timed event focused
+  const clock = useRef(minutesOf(new Date()))
+  // set when a focus key ran off the visible range: what to focus once the next one loaded
+  const [pending, setPending] = useState<{
+    from: string
+    pick: (events: CalendarEvent[]) => CalendarEvent | undefined
+  }>()
   const [revision, setRevision] = useState(0)
 
   // palette and the draft typed in it
@@ -297,8 +306,23 @@ function Calendar({
   useEffect(() => {
     if (!pending || !loaded || loaded.range.start === pending.from) return
     setPending(undefined)
-    setFocusedId((pending.edge === 'first' ? shown[0] : shown.at(-1))?.id)
+    setFocusedId(pending.pick(shown)?.id)
   }, [pending, loaded, shown])
+
+  useEffect(() => {
+    if (!focused) return
+    const start = toDate(focused.start)
+    setCursor(startOfDay(start))
+    if (!focused.allDay) clock.current = minutesOf(start)
+  }, [focused])
+
+  // the view moved away from the cursor: it stays inside, on today if that is there
+  useEffect(() => {
+    if (!current) return
+    const inside = (day: Date) => day >= current.start && day < current.end
+    const today = startOfDay(new Date())
+    setCursor((day) => (inside(day) ? day : inside(today) ? today : startOfDay(current.start)))
+  }, [current])
 
   useEffect(() => {
     if (!focusedId) return
@@ -712,15 +736,27 @@ function Calendar({
     [shown, config, update],
   )
 
+  /** Pages on, then focuses what `pick` finds in the next range. */
+  const page = useCallback(
+    (step: 1 | -1, pick: (events: CalendarEvent[]) => CalendarEvent | undefined) => {
+      if (!range) return
+      setPending({ from: range.start, pick })
+      if (step > 0) controller.next()
+      else controller.prev()
+    },
+    [range, controller],
+  )
+
   const moveFocus = useCallback(
     (step: 1 | -1) => {
       // before the visible range loaded, an empty list would page away
       if (!loaded || !range || loaded.range.start !== range.start) return
       const index = shown.findIndex((e) => e.id === focusedId)
       if (index === -1 && shown.length) {
-        // start next to "now" rather than at the edge of the view
-        const now = Date.now()
-        const upcoming = shown.findIndex((e) => toDate(e.end).getTime() > now)
+        // start at the cursor, today next to "now", rather than at the edge of the view
+        const now = new Date()
+        const from = (sameDay(cursor, now) ? now : cursor).getTime()
+        const upcoming = shown.findIndex((e) => toDate(e.end).getTime() > from)
         const start = upcoming === -1 ? shown.length - (step > 0 ? 1 : 0) : upcoming
         setFocusedId(shown[step > 0 ? start : Math.max(start - 1, 0)]?.id)
         return
@@ -728,26 +764,63 @@ function Calendar({
       const target = shown[index + step]
       if (target) {
         setFocusedId(target.id)
-      } else if (range) {
-        setPending({ edge: step > 0 ? 'first' : 'last', from: range.start })
-        if (step > 0) controller.next()
-        else controller.prev()
+      } else {
+        page(step, (events) => (step > 0 ? events[0] : events.at(-1)))
       }
     },
-    [shown, focusedId, range, loaded, controller],
+    [shown, focusedId, cursor, range, loaded, page],
+  )
+
+  /** h/l: the event closest to the same time on the next day with events. */
+  const moveAcross = useCallback(
+    (step: 1 | -1) => {
+      if (!loaded || !range || loaded.range.start !== range.start) return
+      const day = focused ? toDate(focused.start) : cursor
+      const target = nearestOnNextDay(shown, day, clock.current, step)
+      if (target) setFocusedId(target.id)
+      else page(step, (events) => nearestOnNextDay(events, day, clock.current, step))
+    },
+    [shown, focused, cursor, range, loaded, page],
+  )
+
+  /** H/L/J/K: the cursor takes over from the focus, the view follows it. */
+  const moveCursor = useCallback(
+    (days: number) => {
+      const day = addDays(cursor, days)
+      setFocusedId(undefined)
+      setCursor(day)
+      controller.gotoDate(day)
+    },
+    [cursor, controller],
+  )
+
+  const showView = useCallback(
+    (view: ViewName) => {
+      controller.changeView(viewTypes[view])
+      controller.gotoDate(cursor)
+    },
+    [cursor, controller],
   )
 
   const run = useCallback(
     (action: Action) => {
       if (action === 'prev') controller.prev()
       else if (action === 'next') controller.next()
-      else if (action === 'today') controller.today()
-      else if (action === 'view:week') controller.changeView(viewTypes.week)
-      else if (action === 'view:month') controller.changeView(viewTypes.month)
-      else if (action === 'view:day') controller.changeView(viewTypes.day)
-      else if (action === 'view:list') controller.changeView(viewTypes.agenda)
+      else if (action === 'today') {
+        setCursor(startOfDay(new Date()))
+        controller.today()
+      } else if (action === 'view:week') showView('week')
+      else if (action === 'view:month') showView('month')
+      else if (action === 'view:day') showView('day')
+      else if (action === 'view:list') showView('agenda')
       else if (action === 'focus:next') moveFocus(1)
       else if (action === 'focus:prev') moveFocus(-1)
+      else if (action === 'focus:left') moveAcross(-1)
+      else if (action === 'focus:right') moveAcross(1)
+      else if (action === 'day:prev') moveCursor(-1)
+      else if (action === 'day:next') moveCursor(1)
+      else if (action === 'week:prev') moveCursor(-7)
+      else if (action === 'week:next') moveCursor(7)
       else if (action === 'details') togglePanel('details')
       else if (action === 'open-link') {
         const links = (draftEvent ?? focused)?.links ?? []
@@ -790,7 +863,10 @@ function Calendar({
     },
     [
       controller,
+      showView,
       moveFocus,
+      moveAcross,
+      moveCursor,
       chooseLink,
       draftEvent,
       focused,
@@ -925,7 +1001,10 @@ function Calendar({
           current={current}
           sync={syncStatus}
           onSync={syncNow}
-          onPickDate={(date) => controller.gotoDate(date)}
+          onPickDate={(date) => {
+            setCursor(startOfDay(date))
+            controller.gotoDate(date)
+          }}
         />
       )}
       <main className="min-w-0 flex-1">
@@ -934,6 +1013,7 @@ function Calendar({
           controller={controller}
           availableViews={Object.values(viewTypes)}
           panels={{ sidebar, details, onToggle: togglePanel }}
+          cursorDay={cursor}
           initialView={viewTypes[config.startView]}
           borderless
           height="100%"
@@ -1015,6 +1095,7 @@ function Calendar({
           }}
           onGoto={(date) => {
             closePalette()
+            setCursor(startOfDay(date))
             controller.gotoDate(date)
           }}
           onClose={closePalette}

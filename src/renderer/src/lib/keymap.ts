@@ -1,3 +1,5 @@
+/// <reference lib="dom" />
+
 export type Action =
   | 'prev'
   | 'next'
@@ -8,6 +10,12 @@ export type Action =
   | 'view:list'
   | 'focus:next'
   | 'focus:prev'
+  | 'focus:left'
+  | 'focus:right'
+  | 'day:prev'
+  | 'day:next'
+  | 'week:prev'
+  | 'week:next'
   | 'details'
   | 'open-link'
   | 'links'
@@ -47,6 +55,12 @@ const descriptions: Record<string, string> = {
   'view:list': 'Agenda',
   'focus:next': 'Nächster Termin',
   'focus:prev': 'Vorheriger Termin',
+  'focus:left': 'Termin am Tag davor, gleiche Zeit',
+  'focus:right': 'Termin am Tag danach, gleiche Zeit',
+  'day:prev': 'Ein Tag zurück',
+  'day:next': 'Ein Tag vor',
+  'week:prev': 'Eine Woche zurück',
+  'week:next': 'Eine Woche vor',
   details: 'Details ein/aus',
   'open-link': 'Link öffnen (bei mehreren: Auswahl)',
   links: 'Links: öffnen oder kopieren',
@@ -71,10 +85,14 @@ const descriptions: Record<string, string> = {
 }
 
 const defaults: [string, Action][] = [
-  ['h', 'prev'],
-  ['l', 'next'],
-  ['ArrowLeft', 'prev'],
-  ['ArrowRight', 'next'],
+  ['h', 'focus:left'],
+  ['l', 'focus:right'],
+  ['ArrowLeft', 'focus:left'],
+  ['ArrowRight', 'focus:right'],
+  ['H', 'day:prev'],
+  ['L', 'day:next'],
+  ['J', 'week:next'],
+  ['K', 'week:prev'],
   ['t', 'today'],
   ['w', 'view:week'],
   ['m', 'view:month'],
@@ -98,13 +116,14 @@ const defaults: [string, Action][] = [
   [':', 'command'],
   ['>', 'command'],
   ['e', 'edit-draft'],
+  ['x', 'delete'],
   ['Delete', 'delete'],
   ['D', 'delete'],
   ['c', 'cancel'],
   ['S', 'sync'],
   ['Shift+Enter', 'save'],
   ['u', 'undo'],
-  ['x', 'incognito'],
+  ['I', 'incognito'],
   ['q', 'hide'],
   ['0', 'groups:all'],
   ...Array.from({ length: 9 }, (_, i): [string, Action] => [String(i + 1), `group:${i}`]),

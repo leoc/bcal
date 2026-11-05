@@ -37,6 +37,7 @@ export interface EventCalendarProps
     click?: (ev: MouseEvent) => void
   }
   panels?: PanelButtons
+  cursorDay?: Date
 }
 
 export function EventCalendar({

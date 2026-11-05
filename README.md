@@ -29,10 +29,12 @@ Nextcloud (CalDAV) <-> pimsync (HM service) <-> ~/.calendar/<account>/<collectio
 
 | Key                  | Action                                                             |
 | -------------------- | ------------------------------------------------------------------ |
-| `h` / `l`, `←` / `→` | previous / next period                                             |
+| `h` / `l`, `←` / `→` | closest event in time on the previous / next day with events       |
+| `H` / `L`            | day cursor one day back / forward, the view follows                |
+| `J` / `K`            | day cursor one week forward / back                                 |
 | `t`                  | today                                                              |
 | `w` `m` `d` `a`      | week, month, day, agenda                                           |
-| `j` / `k`, `↓` / `↑` | next / previous event                                              |
+| `j` / `k`, `↓` / `↑` | next / previous event, from the day cursor if none is focused      |
 | `Enter`, `i`         | toggle details panel (off at first start, then remembered)         |
 | `o`                  | open the event's link; with several: choose one                    |
 | `O`                  | all links of the event: open in the browser or copy, by number     |
@@ -42,7 +44,7 @@ Nextcloud (CalDAV) <-> pimsync (HM service) <-> ~/.calendar/<account>/<collectio
 | `n`                  | new event from one line (see below)                                |
 | `e`                  | change the focused event: type only what changes, or reopen draft  |
 | `Shift+Enter`        | save the draft (also right from the palette)                       |
-| `D`, `Delete`        | delete the focused event (asks first)                              |
+| `x`, `D`, `Delete`   | delete the focused event (asks first)                              |
 | `c`                  | cancel the focused event (stays struck through), again: lift it    |
 | `u`                  | take back the last write (new, changed, cancelled or deleted)      |
 | `:` / `>`            | commands                                                           |
@@ -50,7 +52,7 @@ Nextcloud (CalDAV) <-> pimsync (HM service) <-> ~/.calendar/<account>/<collectio
 | `1`–`9`              | show only that group; add-on groups (`toggle: true`) switch on/off |
 | `0`                  | show all calendars                                                 |
 | `S`                  | sync now with pimsync (pull and push)                              |
-| `x`                  | incognito: titles become "Termin", no names in details or search   |
+| `I`                  | incognito: titles become "Termin", no names in details or search   |
 | `q`                  | hide the window; bcal keeps running (see below)                    |
 | `b`                  | toggle sidebar (remembered; also the buttons left and right)       |
 | `Ctrl+=` / `Ctrl+-`  | zoom the whole UI in / out (also `Ctrl`+wheel), `Ctrl+0` resets    |
@@ -128,7 +130,7 @@ its time the same way.
 For a series bcal asks: only this occurrence (an override with
 `RECURRENCE-ID`), this and the following ones (the series ends before, a new one
 starts here) or all of them (moved by as much as this occurrence moved).
-`D`/`Delete` asks the same for series and otherwise confirms once.
+`x`/`D`/`Delete` asks the same for series and otherwise confirms once.
 
 bcal edits the file's own component: alarms, unknown and `X-` properties and
 the reply state of attendees stay; `SEQUENCE` goes up so the server sends updates

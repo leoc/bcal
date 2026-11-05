@@ -25,6 +25,8 @@
     "src/renderer/src/lib/quickadd.ts",
     "src/renderer/src/lib/draft.ts",
     "src/renderer/src/lib/edit.ts",
+    "src/renderer/src/lib/navigate.ts",
+    "src/renderer/src/lib/keymap.ts",
     "src/renderer/src/lib/month.ts",
     "src/renderer/src/lib/links.ts",
     "test/**/*",

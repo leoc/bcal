@@ -101,7 +101,8 @@ near: [52.52, 13.405]
 # openLink: firefox --new-window
 
 # Key overrides: <key>: <action>. Actions: prev, next, today, view:week,
-# view:month, view:day, view:list, focus:next, focus:prev, details, open-link,
+# view:month, view:day, view:list, focus:next, focus:prev, focus:left,
+# focus:right, day:prev, day:next, week:prev, week:next, details, open-link,
 # links, goto, search, toggle:sidebar, incognito, groups:all, group:<n> (0-based),
 # help, close, none (unbind).
 keymap: {}
