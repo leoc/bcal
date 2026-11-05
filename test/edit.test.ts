@@ -205,3 +205,53 @@ describe('movedInput', () => {
     })
   })
 })
+
+describe('date ranges', () => {
+  const edit = (line: string, original: CalendarEvent) =>
+    mergeEdit(
+      buildDraft(line, {
+        calendars,
+        config,
+        chosen: {},
+        calendarId: original.calendarId,
+        videoCode: 'abc',
+        now,
+      }),
+      original,
+      config,
+    )
+
+  it('replaces start and end, the rest stays', () => {
+    const input = edit('2.11. bis 6.11.', event())
+    expect(input).toMatchObject({
+      start: '2026-11-02',
+      end: '2026-11-07',
+      allDay: true,
+      title: 'Kaffee',
+      calendarId: 'acc/family',
+      description: 'Bitte pünktlich',
+    })
+  })
+
+  it('stretches an all-day event', () => {
+    const input = edit(
+      '2.11. - 6.11.',
+      event({ start: '2026-10-29', end: '2026-10-30', allDay: true }),
+    )
+    expect(input).toMatchObject({ start: '2026-11-02', end: '2026-11-07', allDay: true })
+  })
+
+  it('takes a timed range', () => {
+    const input = edit('10.11. 9 Uhr bis 12.11. 17 Uhr', event())
+    expect(input).toMatchObject({
+      start: '2026-11-10T09:00:00',
+      end: '2026-11-12T17:00:00',
+      allDay: false,
+    })
+  })
+
+  it('keeps the length when only a day is named', () => {
+    const input = edit('2.11.', event({ start: '2026-10-29', end: '2026-11-01', allDay: true }))
+    expect(input).toMatchObject({ start: '2026-11-02', end: '2026-11-05', allDay: true })
+  })
+})

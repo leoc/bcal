@@ -60,6 +60,7 @@ export function buildDraft(
   const quick = parseQuickAdd(line, {
     now: context.now,
     defaultDuration: context.config.defaultDuration,
+    backdate: context.config.backdate,
     places: Object.values(context.places ?? {}).map((p) => p.name),
   })
   return {

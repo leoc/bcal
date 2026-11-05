@@ -59,6 +59,22 @@ describe('buildIcs', () => {
     expect(ics).not.toContain('VALARM')
   })
 
+  it('writes an all-day range with the day after as DTEND', () => {
+    const { ics } = buildIcs(
+      {
+        calendarId: 'acc/family',
+        title: 'Urlaub',
+        start: '2026-11-02',
+        end: '2026-11-07',
+        allDay: true,
+        attendees: [],
+      },
+      { uid: 'u-range', now },
+    )
+    expect(ics).toContain('DTSTART;VALUE=DATE:20261102')
+    expect(ics).toContain('DTEND;VALUE=DATE:20261107')
+  })
+
   it('writes GEO next to the location', () => {
     const { ics } = buildIcs(
       {

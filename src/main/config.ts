@@ -77,6 +77,9 @@ hidden: [Birthdays, Holidays]
 defaultCalendar: Personal
 defaultDuration: 60
 defaultAlarm: 15
+# A date without a year stays in this year while it lies at most this far back,
+# later it means next year: month (the current month) or a number of days.
+backdate: month
 # Invites go out from this address when a line names people (@Simon).
 # organizer: { name: Jane Doe, email: jane@example.org }
 # Further own addresses: invitations sent to them are answered as you.
@@ -142,6 +145,8 @@ export function normalize(raw: unknown): Config {
     defaultCalendar: typeof data.defaultCalendar === 'string' ? data.defaultCalendar : undefined,
     defaultDuration: positive(data.defaultDuration) ?? defaultConfig.defaultDuration,
     defaultAlarm: data.defaultAlarm === 0 ? 0 : positive(data.defaultAlarm),
+    backdate:
+      data.backdate === 'month' || data.backdate === 0 ? data.backdate : positive(data.backdate),
     organizer: organizer(data.organizer),
     emails: strings(data.emails).map((e) => e.toLowerCase()),
     video:

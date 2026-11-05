@@ -124,3 +124,12 @@ describe('writeConfigValue', () => {
     expect(normalize(parse(text)).zoom).toBe(1.2)
   })
 })
+
+describe('backdate', () => {
+  it('takes month or a number of days', () => {
+    expect(normalize({ backdate: 'month' }).backdate).toBe('month')
+    expect(normalize({ backdate: 14 }).backdate).toBe(14)
+    expect(normalize({ backdate: 0 }).backdate).toBe(0)
+    expect(normalize({ backdate: 'sometime' }).backdate).toBeUndefined()
+  })
+})

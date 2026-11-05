@@ -134,3 +134,28 @@ describe('places in drafts', () => {
     expect(placeAddress(kranzler)).toBe(kranzler.label)
   })
 })
+
+describe('date ranges', () => {
+  const draft = buildDraft('Urlaub 2.11. bis 6.11. #family', {
+    calendars,
+    config,
+    chosen: {},
+    videoCode: 'abc',
+    now: new Date(2026, 10, 5, 10),
+  })
+
+  it('saves and shows the whole span', () => {
+    expect(toNewEvent(draft, config)).toMatchObject({
+      calendarId: 'acc/family',
+      title: 'Urlaub',
+      start: '2026-11-02',
+      end: '2026-11-07',
+      allDay: true,
+    })
+    expect(draftAsEvent(draft, config)).toMatchObject({
+      start: '2026-11-02',
+      end: '2026-11-07',
+      allDay: true,
+    })
+  })
+})

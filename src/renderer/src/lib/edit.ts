@@ -24,11 +24,12 @@ function mergedTimes(
   const { given } = quick
   const oldStart = toDate(original.start)
   const oldEnd = toDate(original.end)
-  const allDay = given.time ? false : original.allDay
+  const allDay = given.time ? false : given.end || original.allDay
   const day = given.date ? quick.start : oldStart
   const clock = given.time ? quick.start : oldStart
 
   if (allDay) {
+    if (given.end) return { start: quick.start, end: quick.end, allDay }
     const start = midnight(day)
     const days = quick.duration
       ? Math.max(1, Math.round(quick.duration / (24 * 60)))

@@ -65,6 +65,8 @@ nächsten Freitag 14 Uhr eine Stunde Kaffee @Simon #family video
 next friday 2pm 1h call @simon
 jeden Montag 9 Uhr Standup bis 18.12.
 morgen 14-15:30 Workshop im Büro
+Urlaub 2.11. bis 6.11. in Hamburg #family
+Messe 10.11. 9 Uhr bis 12.11. 17 Uhr
 ```
 
 Date and time (chrono), duration (`1h`, `90min`, `eine Stunde`) or end
@@ -75,6 +77,18 @@ participants; people with an address get invited by the server) and
 `video`/`call` for a meeting room (`video:` URL in `config.yml`, plus a random
 room name). Without time it is all-day, without
 date today. Defaults live in `config.yml`.
+
+A date range makes one multi-day event: `2.11. bis 6.11.`, `2.11.-6.11.`,
+`2.-6.11.`, `vom 2. bis 6. November`, `Montag bis Freitag`, `Nov 10 to Nov 12`.
+Without times it is all-day including the last day; with a time on one side
+only, both ends use it. An end before the start lies in the next year
+(`28.12. bis 3.1.`).
+
+A date without a year stays in this year while it lies in the current month,
+later it means next year. `backdate:` in `config.yml` changes that limit: `month`
+or a number of days (`0` for none). For anything older put `<`, `letzter` or
+`last` in front (`<2.10.`, `letzten Montag`, `last 20.10. bis 24.10.`), or type
+the year (`2.10.26`). A range counts as a whole, by its end.
 
 After `bei`, `in`, `im` or `at` the palette suggests places: contacts with an
 address, locations of past events, own `places:` from `config.yml` and the OSM
@@ -99,6 +113,7 @@ you type replaces only those parts of the event, the rest stays:
 fr              same time, moved to Friday
 2h              same start, two hours long
 10-11:15        new start and end on the same day
+2.11. bis 6.11. all-day from the 2nd to the 6th
 in Büro         new place
 @Tim            Tim instead of the current attendees
 #family         moved to another calendar
@@ -107,7 +122,7 @@ Kaffee und Kuchen 16 Uhr   new title and time
 
 The panel on the right previews the changed event; `Shift+Enter` saves it and
 the attendees get an update from the server. All-day events stay all-day unless
-the line names a time. Dragging or resizing an event in the calendar changes
+the line names a time; a date range without times makes any event all-day. Dragging or resizing an event in the calendar changes
 its time the same way.
 
 For a series bcal asks: only this occurrence (an override with

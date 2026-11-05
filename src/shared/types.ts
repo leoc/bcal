@@ -71,6 +71,8 @@ export interface Config {
   defaultCalendar?: string
   /** minutes, when a new event names neither duration nor end */
   defaultDuration: number
+  /** how far a date without a year may lie back: `month` or days; default `month` */
+  backdate?: 'month' | number
   /** reminder in minutes before start; none when unset */
   defaultAlarm?: number
   /** who invites when a new event has attendees */
