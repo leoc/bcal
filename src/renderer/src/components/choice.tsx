@@ -16,12 +16,14 @@ interface Props {
   title: string
   note?: string
   options: ChoiceOption[]
+  /** the option highlighted at first */
+  selected?: string
   onPick: (id: string) => void
   onCancel: () => void
 }
 
 /** A question with a few answers where the palette sits: arrows or digits, Enter, Esc. */
-export function Choice({ title, note, options, onPick, onCancel }: Props) {
+export function Choice({ title, note, options, selected, onPick, onCancel }: Props) {
   const root = useRef<HTMLDivElement>(null)
   useEffect(() => root.current?.focus(), [])
 
@@ -41,7 +43,14 @@ export function Choice({ title, note, options, onPick, onCancel }: Props) {
 
   return (
     <div className="fixed top-16 left-1/2 z-50 w-[min(520px,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-2xl">
-      <Command ref={root} tabIndex={-1} onKeyDown={onKeyDown} loop className="outline-none">
+      <Command
+        ref={root}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        defaultValue={selected}
+        loop
+        className="outline-none"
+      >
         <div className="border-b px-4 py-3">
           <div className="text-sm font-medium">{title}</div>
           {note && <div className="mt-0.5 text-xs text-muted-foreground">{note}</div>}

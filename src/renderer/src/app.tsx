@@ -2,6 +2,7 @@ import { useCalendarController } from '@fullcalendar/react'
 import deLocale from '@fullcalendar/react/locales/de'
 import { initialPanels, type PanelName, type PanelState } from '@shared/panels'
 import type {
+  AnswerScope,
   CalendarEvent,
   CalendarInfo,
   CancelMode,
@@ -10,6 +11,7 @@ import type {
   EventInput,
   ImportDecision,
   ImportPlan,
+  Partstat,
   Person,
   Place,
   Scope,
@@ -35,7 +37,7 @@ import {
   placeAddress,
   toNewEvent,
 } from '@/lib/draft'
-import { editPreview, isLocked, mergeEdit, movedInput } from '@/lib/edit'
+import { editPreview, invitationAnswer, isLocked, mergeEdit, movedInput } from '@/lib/edit'
 import { toDate } from '@/lib/format'
 import { type Action, buildBindings, resolve } from '@/lib/keymap'
 import { linkName } from '@/lib/links'
@@ -45,6 +47,22 @@ const viewTypes: Record<ViewName, string> = {
   month: 'dayGridMonth',
   day: 'timeGridDay',
   agenda: 'listWeek',
+}
+
+const answers: Record<Partstat, { label: string; done: string }> = {
+  ACCEPTED: { label: 'Zusagen', done: 'Zugesagt' },
+  TENTATIVE: { label: 'Vielleicht', done: 'Mit Vielleicht geantwortet' },
+  DECLINED: { label: 'Absagen', done: 'Abgesagt' },
+}
+
+const answerClass: Record<string, string> = {
+  DECLINED: 'bcal-declined',
+  TENTATIVE: 'bcal-tentative',
+  'NEEDS-ACTION': 'bcal-unanswered',
+}
+
+function organizerName(event: CalendarEvent): string | undefined {
+  return event.organizer?.name ?? event.organizer?.email
 }
 
 export function App() {
@@ -114,6 +132,7 @@ function Calendar({
     title: string
     note?: string
     options: ChoiceOption[]
+    selected?: string
     onPick: (id: string) => void
     onCancel?: () => void
   }>()
@@ -238,6 +257,7 @@ function Calendar({
   }, [loaded, byId, visible, ordered, draftEvent, editing])
 
   const focused = shown.find((e) => e.id === focusedId)
+  const focusedAnswer = focused && invitationAnswer(focused, config)
 
   const importing = imports[0]
   const importItem = importing?.items[importIndex]
@@ -332,7 +352,7 @@ function Calendar({
   const withScope = useCallback(
     (
       event: CalendarEvent,
-      verb: { title: string; destructive?: boolean; note?: string },
+      verb: { title: string; destructive?: boolean; note?: string; noFollowing?: boolean },
       act: (scope: Scope) => void,
       onCancel?: () => void,
     ) => {
@@ -342,7 +362,15 @@ function Calendar({
         note: verb.note,
         options: [
           { id: 'this', label: 'Nur dieser Termin', destructive: verb.destructive },
-          { id: 'following', label: 'Dieser und alle folgenden', destructive: verb.destructive },
+          ...(verb.noFollowing
+            ? []
+            : [
+                {
+                  id: 'following',
+                  label: 'Dieser und alle folgenden',
+                  destructive: verb.destructive,
+                },
+              ]),
           { id: 'all', label: 'Alle Termine der Serie', destructive: verb.destructive },
         ],
         onPick: (id) => {
@@ -421,13 +449,59 @@ function Calendar({
     }
   }, [draft, editing, update, config, byId, visible, toggle, discardDraft, controller])
 
+  /** Writes my answer to an invitation; the server replies to the organizer. */
+  const answer = useCallback(
+    (event: CalendarEvent, partstat: Partstat) => {
+      const title = incognito ? 'Termin' : event.title
+      const { label, done } = answers[partstat]
+      withScope(event, { title: `„${title}“: ${label}`, noFollowing: true }, async (scope) => {
+        try {
+          await window.api.answer(
+            { calendarId: event.calendarId, uid: event.uid, recurrenceId: event.recurrenceId },
+            scope as AnswerScope,
+            partstat,
+          )
+          setCanUndo(true)
+          setToast(`${done} · u zurücknehmen`)
+        } catch (error) {
+          setToast(`Antworten fehlgeschlagen: ${reason(error)}`)
+        }
+      })
+    },
+    [incognito, withScope],
+  )
+
+  /** Accept, tentative or decline; the current answer is highlighted and writes nothing. */
+  const askAnswer = useCallback(
+    (event: CalendarEvent, current: string) => {
+      const ids = Object.keys(answers) as Partstat[]
+      setChoice({
+        title: `Antwort auf „${incognito ? 'Termin' : event.title}“`,
+        note: incognito ? undefined : `Organisiert von ${organizerName(event)}`,
+        options: ids.map((id) => ({
+          id,
+          label: answers[id].label,
+          hint: id === current ? 'aktuell' : undefined,
+          destructive: id === 'DECLINED',
+        })),
+        selected: ids.find((id) => id === current),
+        onPick: (id) => {
+          setChoice(undefined)
+          if (id !== current) answer(event, id as Partstat)
+        },
+        onCancel: () => setChoice(undefined),
+      })
+    },
+    [incognito, answer],
+  )
+
   /** `e`: an empty line; what is typed there replaces those parts of the focused event. */
   const startEdit = useCallback(
     (event: CalendarEvent) => {
       if (isLocked(event, config)) {
-        setToast(
-          `Organisiert von ${event.organizer?.name ?? event.organizer?.email}: nur löschen möglich (D)`,
-        )
+        const current = invitationAnswer(event, config)
+        if (current) askAnswer(event, current)
+        else setToast(`Organisiert von ${organizerName(event)}: nur löschen möglich (D)`)
         return
       }
       setEditing(event)
@@ -484,9 +558,24 @@ function Calendar({
     (event: CalendarEvent) => {
       const title = incognito ? 'Termin' : event.title
       if (isLocked(event, config)) {
-        setToast(
-          `Organisiert von ${event.organizer?.name ?? event.organizer?.email}: absagen kann nur der Organisator (D nimmt ihn aus deinem Kalender)`,
-        )
+        const current = invitationAnswer(event, config)
+        if (current === 'DECLINED') askAnswer(event, current)
+        else if (current) {
+          setChoice({
+            title: `Absage an ${incognito ? 'Organisator' : organizerName(event)} senden?`,
+            note: `„${title}“ bleibt ausgegraut im Kalender, die Zeit wird frei.`,
+            options: [{ id: 'decline', label: 'Absage senden', destructive: true }],
+            onPick: () => {
+              setChoice(undefined)
+              answer(event, 'DECLINED')
+            },
+            onCancel: () => setChoice(undefined),
+          })
+        } else {
+          setToast(
+            `Organisiert von ${organizerName(event)}: absagen kann nur der Organisator (D nimmt ihn aus deinem Kalender)`,
+          )
+        }
         return
       }
       const others = event.attendees.filter(
@@ -535,7 +624,7 @@ function Calendar({
         onCancel: () => setChoice(undefined),
       })
     },
-    [incognito, config, withScope],
+    [incognito, config, withScope, answer, askAnswer],
   )
 
   // several Teams links in one invitation: show them all, open or copy each
@@ -754,11 +843,16 @@ function Calendar({
       ...(draftActive ? ([['save', 'Entwurf speichern']] as [Action, string][]) : []),
       ...(focused && !draftActive
         ? ([
-            ['edit-draft', 'Termin bearbeiten'],
+            ['edit-draft', focusedAnswer ? 'Antwort ändern' : 'Termin bearbeiten'],
             ...(focused.links.length
               ? ([['links', 'Links öffnen oder kopieren']] as [Action, string][])
               : []),
-            ['cancel', focused.cancelled ? 'Absage zurücknehmen' : 'Termin absagen'],
+            [
+              'cancel',
+              focused.cancelled || focusedAnswer === 'DECLINED'
+                ? 'Absage zurücknehmen'
+                : 'Termin absagen',
+            ],
             ['delete', 'Termin löschen'],
           ] as [Action, string][])
         : []),
@@ -776,7 +870,7 @@ function Calendar({
         run(action)
       },
     }))
-  }, [bindings, run, incognito, draftActive, canUndo, focused])
+  }, [bindings, run, incognito, draftActive, canUndo, focused, focusedAnswer])
 
   const calendarEvents = useMemo(() => {
     const events = shown.map((e) => {
@@ -789,7 +883,11 @@ function Calendar({
         allDay: e.allDay,
         color,
         contrastColor: contrastFor(color),
-        className: [e.id === focusedId && 'bcal-focused', e.cancelled && 'bcal-cancelled']
+        className: [
+          e.id === focusedId && 'bcal-focused',
+          e.cancelled && 'bcal-cancelled',
+          answerClass[invitationAnswer(e, config) ?? ''],
+        ]
           .filter(Boolean)
           .join(' '),
         // others' events and hidden titles stay put
@@ -870,6 +968,7 @@ function Calendar({
           draft={draftEvent ? 'draft' : importEvent ? 'import' : undefined}
           place={palette ? previewPlace : undefined}
           incognito={incognito}
+          answer={panelEvent && !draftEvent ? invitationAnswer(panelEvent, config) : undefined}
           onOpenLink={(url) => window.api.openLink(url)}
         />
       )}
@@ -943,6 +1042,7 @@ function Calendar({
           title={choice.title}
           note={choice.note}
           options={choice.options}
+          selected={choice.selected}
           onPick={choice.onPick}
           onCancel={choice.onCancel ?? (() => setChoice(undefined))}
         />

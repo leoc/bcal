@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { buildDraft } from '../src/renderer/src/lib/draft'
-import { editPreview, isLocked, mergeEdit, movedInput } from '../src/renderer/src/lib/edit'
+import {
+  editPreview,
+  invitationAnswer,
+  isLocked,
+  mergeEdit,
+  movedInput,
+} from '../src/renderer/src/lib/edit'
 import type { CalendarEvent, CalendarInfo, Config } from '../src/shared/types'
 
 const cal = (id: string, name: string): CalendarInfo => ({
@@ -175,6 +181,34 @@ describe('editPreview', () => {
         { name: 'Simon Müller', email: 'simon@example.org', status: 'ACCEPTED' },
       ],
     })
+  })
+})
+
+describe('invitationAnswer', () => {
+  const boss = { email: 'boss@example.org' }
+  const mine = (status?: string) => [{ email: 'Arthur@example.org', status }]
+
+  it('is my answer on an event someone else organizes', () => {
+    const invited = event({ organizer: boss, attendees: mine('DECLINED') })
+    expect(invitationAnswer(invited, config)).toBe('DECLINED')
+  })
+
+  it('counts a missing PARTSTAT as unanswered', () => {
+    const invited = event({ organizer: boss, attendees: mine() })
+    expect(invitationAnswer(invited, config)).toBe('NEEDS-ACTION')
+  })
+
+  it('needs no answer on own, uninvited or cancelled events', () => {
+    expect(invitationAnswer(event({ attendees: mine('ACCEPTED') }), config)).toBeUndefined()
+    expect(invitationAnswer(event({ organizer: boss, attendees: [] }), config)).toBeUndefined()
+    const cancelled = event({ organizer: boss, attendees: mine('ACCEPTED'), cancelled: true })
+    expect(invitationAnswer(cancelled, config)).toBeUndefined()
+  })
+
+  it('treats a further own address as mine', () => {
+    const second = { ...config, emails: ['second@example.org'] }
+    const own = event({ organizer: { email: 'second@example.org' } })
+    expect(isLocked(own, second)).toBe(false)
   })
 })
 

@@ -132,9 +132,23 @@ starts here) or all of them (moved by as much as this occurrence moved).
 
 bcal edits the file's own component: alarms, unknown and `X-` properties and
 the reply state of attendees stay; `SEQUENCE` goes up so the server sends updates
-or cancellations. Events organized by someone else can only be deleted, which
-takes them out of your calendar. Removed files go to `~/_nobackup/_deletable/bcal/`;
+or cancellations. Events organized by someone else cannot be changed: you answer them
+(see below) or delete them, which takes them out of your calendar. Removed files go to `~/_nobackup/_deletable/bcal/`;
 `u` takes back the last write of the session, one after the other.
+
+## Answering invitations
+
+An event someone else organizes with you on the list (`organizer` or `emails:`
+in `config.yml`) gets an answer instead of an edit. `e` offers accept, tentative
+and decline, `c` declines after one question, and on a declined event `c`
+offers the same choice again. For a series bcal asks: only this occurrence or
+all of them; only the organizer can split a series.
+
+Only your `PARTSTAT` changes, `SEQUENCE` stays, so the server replies to the
+organizer. A declined event stays in the calendar, grey but not struck through,
+and gets `TRANSP:TRANSPARENT`, so the time counts as free; taking the decline
+back blocks it again. Tentative events are lighter, unanswered ones dashed.
+`u` takes an answer back, the organizer then gets the old answer.
 
 ## Cancelling events
 

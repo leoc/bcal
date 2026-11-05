@@ -188,6 +188,9 @@ export type EventInput = Omit<NewEvent, 'alarm'>
 /** My answer to an invitation. */
 export type Partstat = 'ACCEPTED' | 'TENTATIVE' | 'DECLINED'
 
+/** An attendee answers one occurrence or the series; only the organizer can split it. */
+export type AnswerScope = Exclude<Scope, 'following'>
+
 /**
  * What an opened `.ics` does to one event: `new` adds it, `update` replaces
  * the copy in a calendar, `outdated` would replace a newer copy (lower

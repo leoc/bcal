@@ -14,10 +14,27 @@ interface Props {
   place?: Place
   /** show only calendar and time */
   incognito: boolean
+  /** my PARTSTAT when the event is an invitation */
+  answer?: string
   onOpenLink: (url: string) => void
 }
 
-export function EventDetails({ event, calendar, draft, place, incognito, onOpenLink }: Props) {
+const answerLabels: Record<string, string> = {
+  ACCEPTED: 'zugesagt',
+  TENTATIVE: 'vielleicht',
+  DECLINED: 'von dir abgesagt',
+  'NEEDS-ACTION': 'unbeantwortet',
+}
+
+export function EventDetails({
+  event,
+  calendar,
+  draft,
+  place,
+  incognito,
+  answer,
+  onOpenLink,
+}: Props) {
   // incognito: keep calendar and time, drop everything that may carry names
   const shown =
     event && incognito
@@ -49,6 +66,7 @@ export function EventDetails({ event, calendar, draft, place, incognito, onOpenL
               />
               {calendar?.name}
               {shown.cancelled && <span className="text-destructive">abgesagt</span>}
+              {answer && !incognito && <span>{answerLabels[answer] ?? answer}</span>}
               {draft && (
                 <span className="rounded border border-dashed px-1.5 text-[11px] text-foreground">
                   {draft === 'import' ? 'Import' : 'Entwurf'}
@@ -59,6 +77,7 @@ export function EventDetails({ event, calendar, draft, place, incognito, onOpenL
               className={cn(
                 'text-lg leading-snug font-semibold',
                 shown.cancelled && 'text-muted-foreground line-through',
+                answer === 'DECLINED' && 'text-muted-foreground',
               )}
             >
               {shown.title}

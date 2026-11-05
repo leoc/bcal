@@ -19,6 +19,7 @@ const api: Api = {
   update: (ref, input, scope) => ipcRenderer.invoke('vdir:update', ref, input, scope),
   remove: (ref, scope) => ipcRenderer.invoke('vdir:remove', ref, scope),
   cancel: (ref, scope, mode) => ipcRenderer.invoke('vdir:cancel', ref, scope, mode),
+  answer: (ref, scope, partstat) => ipcRenderer.invoke('vdir:answer', ref, scope, partstat),
   undo: () => ipcRenderer.invoke('vdir:undo'),
   syncStatus: () => ipcRenderer.invoke('sync:status'),
   sync: () => ipcRenderer.invoke('sync:run'),

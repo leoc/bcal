@@ -1,6 +1,6 @@
 import ICAL from 'ical.js'
 import type { Partstat } from '../shared/types'
-import { deleteEvent, organizerOf, registerTimezones } from './editor'
+import { deleteEvent, myAttendee, organizerOf, registerTimezones, setAnswer } from './editor'
 
 /**
  * `.ics` files from outside (mail attachments, downloads): what they hold,
@@ -58,21 +58,9 @@ export function sequenceOf(component: ICAL.Component): number {
   return Number.isFinite(value) ? value : 0
 }
 
-/** The ATTENDEE that is me, if any. */
-export function myAttendee(component: ICAL.Component, me: string[]): ICAL.Property | undefined {
-  const mine = new Set(me.map((m) => m.toLowerCase()))
-  return component.getAllProperties('attendee').find((p) => mine.has(emailOf(p)))
-}
-
 export function partstatOf(component: ICAL.Component, me: string[]): string | undefined {
   const value = myAttendee(component, me)?.getParameter('partstat')
   return typeof value === 'string' ? value.toUpperCase() : undefined
-}
-
-function emailOf(property: ICAL.Property): string {
-  return String(property.getFirstValue() ?? '')
-    .replace(/^(mailto:)+/i, '')
-    .toLowerCase()
 }
 
 /** Asked to answer: someone else organizes and I am on the list. */
@@ -126,13 +114,7 @@ export function importedText(
   }
   for (const component of [...(event.master ? [event.master] : []), ...event.overrides]) {
     const added = copy(component)
-    if (options.partstat && options.me) {
-      const attendee = myAttendee(added, options.me)
-      if (attendee) {
-        attendee.setParameter('partstat', options.partstat)
-        attendee.removeParameter('rsvp')
-      }
-    }
+    if (options.partstat && options.me) setAnswer(added, options.partstat, options.me)
     root.addSubcomponent(added)
   }
   return serialize(root)

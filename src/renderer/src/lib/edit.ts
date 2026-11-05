@@ -5,10 +5,25 @@ import { toDate } from './format'
 const MINUTE = 60_000
 const DAY = 86_400_000
 
+function ownAddresses(config: Config): (string | undefined)[] {
+  return [config.organizer?.email?.toLowerCase(), ...config.emails]
+}
+
 /** Organized by someone else: bcal may delete it from the calendar, not change it. */
 export function isLocked(event: CalendarEvent, config: Config): boolean {
   const organizer = event.organizer?.email?.toLowerCase()
-  return Boolean(organizer && organizer !== config.organizer?.email?.toLowerCase())
+  return Boolean(organizer && !ownAddresses(config).includes(organizer))
+}
+
+/**
+ * My PARTSTAT, when the event is someone else's and asks me to answer:
+ * I am on the list and the organizer has not cancelled it.
+ */
+export function invitationAnswer(event: CalendarEvent, config: Config): string | undefined {
+  if (event.cancelled || !isLocked(event, config)) return undefined
+  const own = ownAddresses(config)
+  const attendee = event.attendees.find((a) => own.includes(a.email?.toLowerCase()))
+  return attendee && (attendee.status?.toUpperCase() ?? 'NEEDS-ACTION')
 }
 
 function midnight(date: Date, days = 0): Date {

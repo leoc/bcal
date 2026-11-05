@@ -14,6 +14,7 @@ import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import ICAL from 'ical.js'
 import type {
+  AnswerScope,
   CalendarEvent,
   CalendarInfo,
   Created,
@@ -26,12 +27,14 @@ import type {
   ImportKind,
   ImportPlan,
   NewEvent,
+  Partstat,
   Person,
   Scope,
   Superseded,
 } from '../shared/types'
 import { attendees, links, person } from './details'
 import {
+  answerEvent,
   type CancelMode,
   cancelEvent,
   deleteEvent,
@@ -322,6 +325,19 @@ export class Vdir {
       changes.push({ path, ics: result.split.ics, fresh: true })
     }
     await this.write(mode === 'lift' ? 'Absage zurückgenommen' : 'Absage', changes)
+  }
+
+  /** My answer to an invitation already in a calendar (see `answerEvent`). */
+  async answer(
+    ref: EventRef,
+    scope: AnswerScope,
+    partstat: Partstat,
+    me: string[],
+    now?: Date,
+  ): Promise<void> {
+    const item = this.find(ref)
+    const ics = answerEvent(await readFile(item.path, 'utf8'), ref, scope, partstat, me, now)
+    await this.write('Antwort', [{ path: item.path, ics }])
   }
 
   /**

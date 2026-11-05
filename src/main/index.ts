@@ -15,6 +15,7 @@ import {
 } from 'electron'
 import type { PanelState } from '../shared/panels'
 import type {
+  AnswerScope,
   CancelMode,
   Config,
   DateRange,
@@ -23,6 +24,7 @@ import type {
   ImportDecision,
   ImportPlan,
   NewEvent,
+  Partstat,
   Scope,
 } from '../shared/types'
 import { loadConfig, watchConfig, writeConfigValue } from './config'
@@ -79,6 +81,7 @@ if (!screenshotPath && !app.requestSingleInstanceLock()) app.exit(0)
 let imports: ImportPlan[] = []
 const importTexts = new Map<string, string>()
 const me = () => [config.organizer?.email, ...config.emails].filter((e): e is string => Boolean(e))
+const mine = () => ({ organizer: config.organizer, emails: config.emails })
 
 async function openFiles(paths: string[]): Promise<void> {
   for (const path of paths) {
@@ -245,21 +248,29 @@ app.whenReady().then(async () => {
   ipcMain.handle('places:map', (_event, query: string) => photon.search(query))
   ipcMain.handle('places:geocode', (_event, address: string) => photon.geocode(address))
   ipcMain.handle('vdir:update', async (_event, ref: EventRef, input: EventInput, scope: Scope) => {
-    const updated = await vdir.update(ref, input, scope, { organizer: config.organizer })
+    const updated = await vdir.update(ref, input, scope, mine())
     window?.webContents.send('vdir:changed')
     syncAfterWrite()
     return updated
   })
   ipcMain.handle('vdir:remove', async (_event, ref: EventRef, scope: Scope) => {
-    await vdir.remove(ref, scope, { organizer: config.organizer })
+    await vdir.remove(ref, scope, mine())
     window?.webContents.send('vdir:changed')
     syncAfterWrite()
   })
   ipcMain.handle('vdir:cancel', async (_event, ref: EventRef, scope: Scope, mode: CancelMode) => {
-    await vdir.cancel(ref, scope, mode, { organizer: config.organizer })
+    await vdir.cancel(ref, scope, mode, mine())
     window?.webContents.send('vdir:changed')
     syncAfterWrite()
   })
+  ipcMain.handle(
+    'vdir:answer',
+    async (_event, ref: EventRef, scope: AnswerScope, partstat: Partstat) => {
+      await vdir.answer(ref, scope, partstat, me())
+      window?.webContents.send('vdir:changed')
+      syncAfterWrite()
+    },
+  )
   ipcMain.handle('vdir:undo', async () => {
     const undone = await vdir.undo()
     window?.webContents.send('vdir:changed')

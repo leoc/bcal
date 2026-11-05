@@ -1,6 +1,14 @@
 import { randomUUID } from 'node:crypto'
 import ICAL from 'ical.js'
-import type { CancelMode, EventInput, EventRef, Person, Scope } from '../shared/types'
+import type {
+  AnswerScope,
+  CancelMode,
+  EventInput,
+  EventRef,
+  Partstat,
+  Person,
+  Scope,
+} from '../shared/types'
 import { addPerson, BERLIN, time } from './writer'
 
 /**
@@ -12,6 +20,8 @@ import { addPerson, BERLIN, time } from './writer'
 export interface EditOptions {
   /** the user; events organized by someone else cannot be edited */
   organizer?: Person
+  /** further own addresses: events organized from them are mine as well */
+  emails?: string[]
   now?: Date
   /** UID for the new series when "following" splits one */
   newUid?: string
@@ -46,9 +56,31 @@ export function organizerOf(component: ICAL.Component): string | undefined {
   return value.replace(/^(mailto:)+/i, '').toLowerCase() || undefined
 }
 
-function isLocked(component: ICAL.Component, me: Person | undefined): boolean {
+function isLocked(component: ICAL.Component, options: EditOptions): boolean {
   const organizer = organizerOf(component)
-  return organizer !== undefined && organizer !== me?.email?.toLowerCase()
+  const mine = [options.organizer?.email?.toLowerCase(), ...(options.emails ?? [])]
+  return organizer !== undefined && !mine.includes(organizer)
+}
+
+/** The ATTENDEE that is me, if any. */
+export function myAttendee(component: ICAL.Component, me: string[]): ICAL.Property | undefined {
+  const mine = new Set(me.map((m) => m.toLowerCase()))
+  return component.getAllProperties('attendee').find((p) => mine.has(emailOf(p)))
+}
+
+/**
+ * Sets my PARTSTAT. A declined event no longer blocks the time; taking the
+ * decline back blocks it again. Returns false when I am not on the list.
+ */
+export function setAnswer(component: ICAL.Component, partstat: Partstat, me: string[]): boolean {
+  const attendee = myAttendee(component, me)
+  if (!attendee) return false
+  const before = String(attendee.getParameter('partstat') ?? '').toUpperCase()
+  attendee.setParameter('partstat', partstat)
+  attendee.removeParameter('rsvp')
+  if (partstat === 'DECLINED') component.updatePropertyWithValue('transp', 'TRANSPARENT')
+  else if (before === 'DECLINED') component.removeAllProperties('transp')
+  return true
 }
 
 function parse(ics: string) {
@@ -183,6 +215,10 @@ function syncAttendees(component: ICAL.Component, people: Person[], me: Person |
 function touch(component: ICAL.Component, now: Date): void {
   const sequence = Number(component.getFirstPropertyValue('sequence') ?? 0)
   component.updatePropertyWithValue('sequence', (Number.isFinite(sequence) ? sequence : 0) + 1)
+  modified(component, now)
+}
+
+function modified(component: ICAL.Component, now: Date): void {
   component.updatePropertyWithValue('dtstamp', ICAL.Time.fromJSDate(now, true))
   component.updatePropertyWithValue('last-modified', ICAL.Time.fromJSDate(now, true))
 }
@@ -316,7 +352,7 @@ export function editEvent(
   const { root, master, override, rid } = find(ics, ref)
   const target = master ?? override
   if (!target) throw new Error('nothing to edit')
-  if (isLocked(target, options.organizer)) throw new LockedError('organized by someone else')
+  if (isLocked(target, options)) throw new LockedError('organized by someone else')
   const recurring = Boolean(master?.hasProperty('rrule') || master?.hasProperty('rdate'))
   const times = { start: input.start, end: input.end }
 
@@ -529,7 +565,7 @@ export function cancelEvent(
   const { root, master, override, rid } = find(ics, ref)
   const target = master ?? override
   if (!target) throw new Error('nothing to cancel')
-  if (isLocked(target, options.organizer)) throw new LockedError('organized by someone else')
+  if (isLocked(target, options)) throw new LockedError('organized by someone else')
   const now = options.now ?? new Date()
   const recurring = Boolean(master?.hasProperty('rrule') || master?.hasProperty('rdate'))
   const series = recurring && master && rid && ref.recurrenceId ? master : undefined
@@ -585,6 +621,46 @@ export function cancelEvent(
     setStatus(c, status, now)
   }
   return { ics: serialize(root), split: { uid, ics: serialize(split) } }
+}
+
+/**
+ * My answer to an event someone else organizes. Only my ATTENDEE and my TRANSP
+ * change, and SEQUENCE stays: the server sends the organizer a reply, not an
+ * update. `this` on a series answers one occurrence through an override.
+ */
+export function answerEvent(
+  ics: string,
+  ref: EventRef,
+  scope: AnswerScope,
+  partstat: Partstat,
+  me: string[],
+  now = new Date(),
+): string {
+  const { root, master, override, rid } = find(ics, ref)
+  const target = override ?? master
+  if (!target) throw new Error('nothing to answer')
+  if (!myAttendee(target, me)) throw new LockedError('not invited')
+  const recurring = Boolean(master?.hasProperty('rrule') || master?.hasProperty('rdate'))
+  const answer = (component: ICAL.Component) => {
+    if (setAnswer(component, partstat, me)) modified(component, now)
+  }
+
+  if (scope === 'all' || !recurring || !master || !rid || !ref.recurrenceId) {
+    for (const v of root.getAllSubcomponents('vevent')) {
+      if (v.getFirstPropertyValue('uid') === ref.uid) answer(v)
+    }
+    return serialize(root)
+  }
+  let component = override
+  if (!component) {
+    component = clone(master)
+    for (const name of ['rrule', 'rdate', 'exdate']) component.removeAllProperties(name)
+    startAt(component, master, rid)
+    setRid(component, rid, master)
+    root.addSubcomponent(component)
+  }
+  answer(component)
+  return serialize(root)
 }
 
 /** Moves a copy of the series to the occurrence `rid`, keeping zones and length. */

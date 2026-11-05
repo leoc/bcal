@@ -1,5 +1,6 @@
 import type { PanelState } from './panels'
 import type {
+  AnswerScope,
   CalendarEvent,
   CalendarInfo,
   CancelMode,
@@ -12,6 +13,7 @@ import type {
   ImportDecision,
   ImportPlan,
   NewEvent,
+  Partstat,
   Person,
   Place,
   Scope,
@@ -39,6 +41,8 @@ export interface Api {
   remove: (ref: EventRef, scope: Scope) => Promise<void>
   /** cancels an event without deleting it (struck through), or lifts the cancellation */
   cancel: (ref: EventRef, scope: Scope, mode: CancelMode) => Promise<void>
+  /** my answer to an event someone else organizes */
+  answer: (ref: EventRef, scope: AnswerScope, partstat: Partstat) => Promise<void>
   /** how the last pimsync run went, and whether one runs */
   syncStatus: () => Promise<SyncStatus>
   /** runs pimsync now (pull and push); resolves when it is done */

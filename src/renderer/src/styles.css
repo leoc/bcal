@@ -140,6 +140,19 @@
   text-decoration: line-through;
 }
 
+/* my answer to someone else's event: declined stays as a record, grey */
+.bcal-declined {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+.bcal-tentative {
+  opacity: 0.7;
+}
+.bcal-unanswered:not(.bcal-focused) {
+  outline: 1px dashed var(--foreground);
+  outline-offset: -1px;
+}
+
 /* unsaved draft from the palette */
 .bcal-draft {
   opacity: 0.8;
